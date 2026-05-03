@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
 import {
   type Mode,
@@ -18,6 +19,7 @@ import {
   parseStudents,
   decomposeTilde,
 } from "@/lib/worksheet";
+import { alphabetItems, getAlphabetItem } from "@/lib/alphabet";
 import { printWorksheet } from "@/lib/print";
 
 // ---------------------------------------------------------------------------
@@ -107,6 +109,38 @@ function TracingRow({
   );
 }
 
+function SingleLetterHero({
+  letter,
+  image,
+}: {
+  letter: string;
+  image?: WorksheetItem["image"];
+}) {
+  if (!image) {
+    return <TracingRow text={letter} fontSize={FONT_SIZE_LETTER_EXAMPLE} />;
+  }
+
+  return (
+    <div className="grid grid-cols-1 gap-1 sm:grid-cols-[minmax(0,1fr)_160px]">
+      <TracingRow text={letter} fontSize={FONT_SIZE_LETTER_EXAMPLE} />
+      <div className="flex h-42 flex-col overflow-hidden border-2 border-[#60a5fa] bg-white">
+        <div className="min-h-0 flex-1 p-1">
+          <Image
+            src={image.src}
+            alt={image.alt}
+            width={160}
+            height={136}
+            className="h-full w-full object-contain"
+          />
+        </div>
+        <div className="border-t border-[#bae6fd] px-1.5 py-1.5 text-center text-sm font-extrabold leading-tight text-[#0369a1] [overflow-wrap:anywhere]">
+          {image.label}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
@@ -116,6 +150,7 @@ export default function PontiletraPage() {
   const [name, setName] = useState("Carolina");
   const [letter, setLetter] = useState("A");
   const [letterRepeat, setLetterRepeat] = useState(8);
+  const [showLetterImage, setShowLetterImage] = useState(true);
   const [phrase, setPhrase] = useState("O gato subiu no telhado.");
   const [studentsText, setStudentsText] = useState(
     "Ana\nCarlos\nMariana\nJoão\nSofia",
@@ -129,6 +164,16 @@ export default function PontiletraPage() {
 
   const students = parseStudents(studentsText);
   const safeLetter = normalizeLetter(letter);
+  const alphabetItem = getAlphabetItem(safeLetter);
+  const letterImage =
+    showLetterImage && alphabetItem
+      ? {
+          src: alphabetItem.image,
+          alt: `${alphabetItem.letter} de ${alphabetItem.label}`,
+          letter: alphabetItem.letter,
+          label: alphabetItem.label,
+        }
+      : undefined;
   const fontSize =
     mode === "single_letter" ? FONT_SIZE_LETTER_MODE : FONT_SIZE_DEFAULT;
   const isPhrase = mode === "phrase" || mode === "single_name";
@@ -138,7 +183,12 @@ export default function PontiletraPage() {
       case "single_name":
         return [{ text: normalizeText(name, "Nome") }];
       case "single_letter":
-        return [{ text: repeatedLetterLine(safeLetter, letterRepeat) }];
+        return [
+          {
+            text: repeatedLetterLine(safeLetter, letterRepeat),
+            image: letterImage,
+          },
+        ];
       case "phrase":
         return [{ text: normalizeText(phrase, "Frase") }];
       case "student_list":
@@ -150,6 +200,11 @@ export default function PontiletraPage() {
 
   // Computed once — shared between preview and print so they always match
   const items = getItems();
+
+  function handleLetterChange(value: string) {
+    const chars = Array.from(value.trim().toLocaleUpperCase("pt-BR"));
+    setLetter(chars[chars.length - 1] ?? safeLetter);
+  }
 
   async function handlePrint() {
     if (isPrinting) return;
@@ -236,15 +291,55 @@ export default function PontiletraPage() {
                 <label htmlFor="letter-input" className={labelCls}>
                   Letra para Treinar
                 </label>
-                <input
-                  id="letter-input"
-                  type="text"
-                  value={letter}
-                  onChange={(e) => setLetter(normalizeLetter(e.target.value))}
-                  maxLength={4}
-                  className="px-3 py-2.25 rounded-lg border-[1.5px] border-[#e2e8f0] text-[30px] text-center text-slate-900 bg-slate-50 outline-none box-border w-17.5"
-                  style={{ fontFamily: "'Patrick Hand', cursive" }}
-                />
+                <div className="flex items-center gap-3">
+                  <input
+                    id="letter-input"
+                    type="text"
+                    value={safeLetter}
+                    onChange={(e) => handleLetterChange(e.target.value)}
+                    onFocus={(e) => e.currentTarget.select()}
+                    maxLength={2}
+                    className="h-13 w-14 rounded-lg border-[1.5px] border-[#e2e8f0] bg-slate-50 px-2 text-center text-[30px] text-slate-900 outline-none box-border"
+                    style={{ fontFamily: "'Patrick Hand', cursive" }}
+                  />
+                  {alphabetItem && (
+                    <div className="flex min-w-0 items-center gap-2">
+                      <Image
+                        src={alphabetItem.image}
+                        alt={`${alphabetItem.letter} de ${alphabetItem.label}`}
+                        width={44}
+                        height={44}
+                        className="h-11 w-11 object-contain"
+                      />
+                      <div className="min-w-0 text-sm font-extrabold text-slate-700">
+                        {alphabetItem.label}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <div className="mt-3 grid grid-cols-[repeat(7,minmax(0,1fr))] gap-1.5">
+                  {alphabetItems.map((item) => {
+                    const selected = item.letter === safeLetter;
+
+                    return (
+                      <button
+                        key={item.letter}
+                        type="button"
+                        aria-pressed={selected}
+                        title={`${item.letter} de ${item.label}`}
+                        onClick={() => setLetter(item.letter)}
+                        className={`flex aspect-square items-center justify-center rounded-md border-[1.5px] text-sm font-extrabold transition-colors ${
+                          selected
+                            ? "border-[#0284c7] bg-[#0284c7] text-white"
+                            : "border-[#dbeafe] bg-[#f8fafc] text-[#0369a1] hover:bg-[#f0f9ff]"
+                        }`}
+                        style={{ fontFamily: "'Nunito', sans-serif" }}
+                      >
+                        {item.letter}
+                      </button>
+                    );
+                  })}
+                </div>
                 <div className="mt-3">
                   <label htmlFor="letter-repeat" className={labelCls}>
                     Repetições por linha: {letterRepeat}
@@ -258,6 +353,26 @@ export default function PontiletraPage() {
                     onChange={(e) => setLetterRepeat(Number(e.target.value))}
                     className="w-full accent-[#0284c7]"
                   />
+                </div>
+                <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <label
+                    htmlFor="letter-image"
+                    className="flex items-center gap-2 text-sm font-extrabold text-slate-700"
+                  >
+                    <input
+                      id="letter-image"
+                      type="checkbox"
+                      checked={showLetterImage}
+                      onChange={(e) => setShowLetterImage(e.target.checked)}
+                      className="h-4 w-4 accent-[#0284c7]"
+                    />
+                    Imagem da letra
+                  </label>
+                  {!alphabetItem && (
+                    <div className="mt-3 text-xs font-bold text-slate-400">
+                      Sem imagem para esta letra.
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -404,9 +519,9 @@ export default function PontiletraPage() {
                   )}
                   {mode === "single_letter" ? (
                     <>
-                      <TracingRow
-                        text={safeLetter}
-                        fontSize={FONT_SIZE_LETTER_EXAMPLE}
+                      <SingleLetterHero
+                        letter={safeLetter}
+                        image={item.image}
                       />
                       {Array.from({ length: lines }, (_, j) => (
                         <TracingRow

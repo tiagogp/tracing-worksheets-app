@@ -7,7 +7,7 @@ import {
   ROW_EXTRA_HEIGHT,
   TILDE_FONT_SCALE,
 } from "./worksheet";
-import type { Mode, WorksheetItem } from "./worksheet";
+import type { Mode, WorksheetImage, WorksheetItem } from "./worksheet";
 
 // ---------------------------------------------------------------------------
 // Row HTML string builders
@@ -42,6 +42,10 @@ export function buildTracingRowStr(
   return `<div class="tracing-row" style="height:${rowH}px">${cells}</div>`;
 }
 
+function buildLetterImageStr(image: WorksheetImage): string {
+  return `<div class="letter-picture"><img src="${escXML(image.src)}" alt="${escXML(image.alt)}" /><div class="letter-picture-name">${escXML(image.label)}</div></div>`;
+}
+
 export function buildRowsStr(
   item: WorksheetItem,
   mode: Mode,
@@ -58,10 +62,13 @@ export function buildRowsStr(
       FONT_SIZE_LETTER_EXAMPLE,
       false,
     );
+    const heroRow = item.image
+      ? `<div class="single-letter-hero">${exampleRow}${buildLetterImageStr(item.image)}</div>`
+      : exampleRow;
     const tracingRows = Array.from({ length: lines }, () =>
       buildTracingRowStr(item.text, fontSize, true),
     ).join("");
-    return exampleRow + tracingRows;
+    return heroRow + tracingRows;
   }
 
   const exampleRow = buildTracingRowStr(
@@ -101,6 +108,11 @@ body{font-family:'Nunito',sans-serif;}
 .letter-cell{flex:1;border:2px solid #60a5fa;margin-left:-2px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:8px;position:relative;z-index:1;}
 .letter-cell:first-child{margin-left:0;}
 .letter-char{font-family:'Pontiletra','Patrick Hand',cursive;line-height:1;}
+.single-letter-hero{display:grid;grid-template-columns:minmax(0,1fr) 132px;gap:10px;align-items:stretch;margin-bottom:2px;}
+.single-letter-hero .tracing-row{margin-bottom:0;}
+.letter-picture{height:168px;border:2px solid #60a5fa;border-radius:8px;display:flex;flex-direction:column;align-items:stretch;justify-content:stretch;overflow:hidden;background:#fff;}
+.letter-picture img{width:100%;height:136px;object-fit:contain;display:block;padding:4px;}
+.letter-picture-name{width:100%;border-top:1px solid #bae6fd;padding:5px 4px 6px;text-align:center;font-size:14px;font-weight:800;line-height:1.1;color:#0369a1;overflow-wrap:anywhere;}
 .ws-footer{border-top:1px dashed #e2e8f0;margin-top:14px;padding-top:9px;display:flex;justify-content:space-between;gap:16px;font-size:11px;color:#94a3b8;}
 `;
 }
@@ -170,6 +182,84 @@ async function fetchFontAsBase64(): Promise<string> {
   );
 }
 
+async function fetchAsDataURL(src: string): Promise<string> {
+  if (src.startsWith("data:")) return src;
+
+  const res = await fetch(src);
+  if (!res.ok) throw new Error(`Image fetch failed: ${src}`);
+  const blob = await res.blob();
+
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () => resolve(String(reader.result)));
+    reader.addEventListener("error", () => reject(reader.error));
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function inlineImages(items: WorksheetItem[]): Promise<WorksheetItem[]> {
+  const imageCache = new Map<string, string>();
+
+  return Promise.all(
+    items.map(async (item) => {
+      if (!item.image) return item;
+
+      try {
+        const cached =
+          imageCache.get(item.image.src) ?? (await fetchAsDataURL(item.image.src));
+        imageCache.set(item.image.src, cached);
+
+        return {
+          ...item,
+          image: {
+            ...item.image,
+            src: cached,
+          },
+        };
+      } catch {
+        return item;
+      }
+    }),
+  );
+}
+
+async function waitForImages(doc: Document): Promise<void> {
+  const images = Array.from(doc.images);
+
+  await Promise.all(
+    images.map(
+      (image) =>
+        new Promise<void>((resolve) => {
+          const decode = () => {
+            if (image.decode) {
+              void image.decode().then(
+                () => resolve(),
+                () => resolve(),
+              );
+            } else {
+              resolve();
+            }
+          };
+
+          if (image.complete) {
+            decode();
+            return;
+          }
+
+          image.addEventListener("load", decode, { once: true });
+          image.addEventListener("error", () => resolve(), { once: true });
+        }),
+    ),
+  );
+}
+
+async function waitForPrintAssets(win: Window): Promise<void> {
+  await Promise.all([
+    win.document.fonts ? win.document.fonts.ready : Promise.resolve(),
+    waitForImages(win.document),
+  ]);
+}
+
 export type PrintWorksheetOptions = Omit<PrintHTMLOptions, "printCSS">;
 
 export async function printWorksheet(
@@ -182,8 +272,10 @@ export async function printWorksheet(
     // fall back to URL reference in @font-face
   }
 
+  const items = await inlineImages(options.items);
   const html = buildPrintHTML({
     ...options,
+    items,
     printCSS: buildPrintCSS(fontBase64),
   });
   const blob = new Blob([html], { type: "text/html;charset=utf-8" });
@@ -216,14 +308,10 @@ export async function printWorksheet(
           }, 1000);
         };
 
-        if (win.document.fonts) {
-          void win.document.fonts.ready.then(
-            () => setTimeout(finish, 150),
-            () => setTimeout(finish, 500),
-          );
-        } else {
-          setTimeout(finish, 800);
-        }
+        void waitForPrintAssets(win).then(
+          () => setTimeout(finish, 150),
+          () => setTimeout(finish, 500),
+        );
       },
       { once: true },
     );

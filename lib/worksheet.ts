@@ -7,7 +7,18 @@ export const MODE_LABELS: Record<Mode, string> = {
   student_list: "Lista de Alunos",
 };
 
-export type WorksheetItem = { text: string; label?: string };
+export type WorksheetImage = {
+  src: string;
+  alt: string;
+  letter: string;
+  label: string;
+};
+
+export type WorksheetItem = {
+  text: string;
+  label?: string;
+  image?: WorksheetImage;
+};
 
 // Design tokens — shared between preview (React) and print (HTML string)
 export const FONT_SIZE_LETTER_EXAMPLE = 130; // oversized single-letter example row
