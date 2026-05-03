@@ -1,88 +1,38 @@
 "use client";
 
 import { useState } from "react";
+import {
+  type Mode,
+  type WorksheetItem,
+  MODE_LABELS,
+  LINE_COLOR,
+  CELL_BORDER_COLOR,
+  FONT_SIZE_DEFAULT,
+  FONT_SIZE_LETTER_EXAMPLE,
+  FONT_SIZE_LETTER_MODE,
+  ROW_EXTRA_HEIGHT,
+  TILDE_FONT_SCALE,
+  normalizeText,
+  normalizeLetter,
+  repeatedLetterLine,
+  parseStudents,
+  decomposeTilde,
+} from "@/lib/worksheet";
+import { printWorksheet } from "@/lib/print";
 
-type Mode = "single_name" | "single_letter" | "phrase" | "student_list";
+// ---------------------------------------------------------------------------
+// Shared style primitives
+// ---------------------------------------------------------------------------
 
-const MODE_LABELS: Record<Mode, string> = {
-  single_name: "Nome Individual",
-  single_letter: "Letra Individual",
-  phrase: "Frase",
-  student_list: "Lista de Alunos",
-};
+const labelCls =
+  "block text-[10px] font-extrabold text-slate-400 uppercase tracking-[0.8px] mb-1.5";
+const inputCls =
+  "w-full px-3 py-[9px] rounded-lg border-[1.5px] border-[#e2e8f0] text-base text-slate-900 bg-slate-50 outline-none box-border";
 
-type WorksheetItem = { text: string; label?: string };
-
-const LETTER_BIG_FS = 130;
-const LC = "#93c5fd";
-const BOX_BORDER = "#60a5fa";
-
-function normalizeText(value: string, fallback: string): string {
-  return value.trim() || fallback;
-}
-
-function normalizeLetter(value: string): string {
-  return Array.from(value.trim().toLocaleUpperCase("pt-BR"))[0] || "A";
-}
-
-function repeatedLetterLine(letter: string, repeat: number): string {
-  return Array.from({ length: repeat }, () => letter).join("");
-}
-
-function parseStudents(value: string): string[] {
-  return value
-    .split(/\r?\n/)
-    .map((student) => student.trim())
-    .filter(Boolean);
-}
-
-function escXML(s: string): string {
-  return String(s)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-function decomposeTilde(char: string): { base: string; hasTilde: boolean } {
-  const nfd = char.normalize("NFD");
-  if (nfd.includes("̃")) {
-    return { base: nfd.replace("̃", ""), hasTilde: true };
-  }
-  return { base: char, hasTilde: false };
-}
-
-function tracingRowStr(
-  text: string,
-  fontSize: number,
-  dim: boolean,
-  redFirstLetter = false,
-): string {
-  const tc = dim ? "#c0cfe8" : "#1e293b";
-  const rowH = fontSize + 38;
-  const cells = Array.from(text)
-    .map((char, i) => {
-      const color = redFirstLetter && i === 0 ? "#dc2626" : tc;
-      const { base, hasTilde } = decomposeTilde(char);
-      const tildeTop = base !== base.toLowerCase() ? "-0.4em" : "-0.1em";
-      const tildeSpan = hasTilde
-        ? `<span style="position:absolute;top:${tildeTop};left:50%;transform:translateX(-50%);font-family:'Pontiletra','Patrick Hand',cursive;font-size:${Math.round(fontSize * 0.6)}px;line-height:1;color:${color}">˜</span>`
-        : "";
-      return `<div class="letter-cell"><span class="letter-char" style="position:relative;display:inline-block;font-size:${fontSize}px;color:${color}">${escXML(base)}${tildeSpan}</span></div>`;
-    })
-    .join("");
-  return `<div class="tracing-row" style="height:${rowH}px">${cells}</div>`;
-}
-
-function tracingRowStrLetter(letter: string): string {
-  const rowH = LETTER_BIG_FS + 38;
-  const { base, hasTilde } = decomposeTilde(letter);
-  const tildeTop = base !== base.toLowerCase() ? "-0.4em" : "-0.1em";
-  const tildeSpan = hasTilde
-    ? `<span style="position:absolute;top:${tildeTop};left:50%;transform:translateX(-50%);font-family:'Pontiletra','Patrick Hand',cursive;font-size:${Math.round(LETTER_BIG_FS * 0.6)}px;line-height:1;color:#1e293b">˜</span>`
-    : "";
-  return `<div class="tracing-row" style="height:${rowH}px"><div class="letter-cell"><span class="letter-char" style="position:relative;display:inline-block;font-size:${LETTER_BIG_FS}px;color:#1e293b">${escXML(base)}${tildeSpan}</span></div></div>`;
-}
+// ---------------------------------------------------------------------------
+// TracingRow — renders a single guide-lined row for the live preview.
+// Replaces both the former TracingRow and TracingRowLetter components.
+// ---------------------------------------------------------------------------
 
 function TracingRow({
   text,
@@ -96,21 +46,20 @@ function TracingRow({
   redFirstLetter?: boolean;
 }) {
   const tc = dim ? "#c0cfe8" : "#1e293b";
-  const chars = Array.from(text);
   return (
     <div
       className="relative flex mb-0.5"
       style={{
-        height: fontSize + 38,
-        borderTop: `1px solid ${LC}`,
-        borderBottom: `1.5px solid ${LC}`,
+        height: fontSize + ROW_EXTRA_HEIGHT,
+        borderTop: `1px solid ${LINE_COLOR}`,
+        borderBottom: `1.5px solid ${LINE_COLOR}`,
       }}
     >
       <div
         className="absolute top-1/2 left-0 right-0 h-0 pointer-events-none"
-        style={{ borderTop: `0.7px dashed ${LC}` }}
+        style={{ borderTop: `0.7px dashed ${LINE_COLOR}` }}
       />
-      {chars.map((char, i) => {
+      {Array.from(text).map((char, i) => {
         const { base, hasTilde } = decomposeTilde(char);
         const color = redFirstLetter && i === 0 ? "#dc2626" : tc;
         return (
@@ -118,7 +67,7 @@ function TracingRow({
             key={i}
             className="flex-1 flex items-end justify-center pb-2 relative z-[1]"
             style={{
-              border: `2px solid ${BOX_BORDER}`,
+              border: `2px solid ${CELL_BORDER_COLOR}`,
               marginLeft: i === 0 ? 0 : -2,
             }}
           >
@@ -137,12 +86,12 @@ function TracingRow({
                 <span
                   style={{
                     position: "absolute",
-                    top: base !== base.toLowerCase() ? "-0.4em" : "-0.1em",
+                    top: base !== base.toLowerCase() ? "-0.4em" : "-0.4em",
                     left: "50%",
                     transform: "translateX(-50%)",
                     fontFamily:
                       "var(--font-pontiletra), 'Patrick Hand', cursive",
-                    fontSize: Math.round(fontSize),
+                    fontSize: Math.round(fontSize * TILDE_FONT_SCALE),
                     lineHeight: 1,
                     color,
                   }}
@@ -158,87 +107,9 @@ function TracingRow({
   );
 }
 
-function TracingRowLetter({ letter }: { letter: string }) {
-  const { base, hasTilde } = decomposeTilde(letter);
-  return (
-    <div
-      className="relative flex mb-0.5"
-      style={{
-        height: LETTER_BIG_FS + 38,
-        borderTop: `1px solid ${LC}`,
-        borderBottom: `1.5px solid ${LC}`,
-      }}
-    >
-      <div
-        className="absolute top-1/2 left-0 right-0 h-0 pointer-events-none"
-        style={{ borderTop: `0.7px dashed ${LC}` }}
-      />
-      <div
-        className="flex-1 flex items-end justify-center pb-2 relative z-1"
-        style={{ border: `2px solid ${BOX_BORDER}` }}
-      >
-        <span
-          style={{
-            position: "relative",
-            display: "inline-block",
-            fontFamily: "var(--font-pontiletra), 'Patrick Hand', cursive",
-            fontSize: LETTER_BIG_FS,
-            color: "#1e293b",
-            lineHeight: 1,
-          }}
-        >
-          {base}
-          {hasTilde && (
-            <span
-              style={{
-                position: "absolute",
-                top: base !== base.toLowerCase() ? "-0.4em" : "-0.1em",
-                left: "50%",
-                transform: "translateX(-50%)",
-                fontFamily: "var(--font-pontiletra), 'Patrick Hand', cursive",
-                fontSize: Math.round(LETTER_BIG_FS * 0.6),
-                lineHeight: 1,
-                color: "#1e293b",
-              }}
-            >
-              ~
-            </span>
-          )}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function buildPrintCSS(fontBase64: string): string {
-  const src = fontBase64
-    ? `url('data:font/truetype;base64,${fontBase64}') format('truetype')`
-    : `url('/pontiletra.ttf') format('truetype')`;
-  return `@font-face{font-family:'Pontiletra';src:${src};font-display:block;}
-@page{size:A4 portrait;margin:1.5cm;}
-*{box-sizing:border-box;margin:0;padding:0;}
-html,body{width:100%;background:#fff;}
-body{font-family:'Nunito',sans-serif;}
-.ws-page{width:100%;min-height:calc(29.7cm - 3cm);display:flex;flex-direction:column;}
-.ws-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;padding-bottom:12px;border-bottom:2px solid #bae6fd;}
-.ws-title{font-family:'Fredoka One',cursive;font-size:20px;color:#0369a1;text-transform:uppercase;letter-spacing:1px;overflow-wrap:anywhere;}
-.ws-subtitle{font-size:11px;color:#64748b;font-style:italic;margin-top:3px;overflow-wrap:anywhere;}
-.ws-content{flex:1;}
-.tracing-block{margin-bottom:10px;}
-.student-badge{font-size:10px;font-weight:700;color:#0ea5e9;text-transform:uppercase;letter-spacing:.6px;margin-bottom:3px;}
-.tracing-row{position:relative;display:flex;border-top:1px solid #93c5fd;border-bottom:1.5px solid #93c5fd;margin-bottom:2px;}
-.tracing-row::after{content:'';position:absolute;top:50%;left:0;right:0;border-top:0.7px dashed #93c5fd;pointer-events:none;}
-.letter-cell{flex:1;border:2px solid #60a5fa;margin-left:-2px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:8px;position:relative;z-index:1;}
-.letter-cell:first-child{margin-left:0;}
-.letter-char{font-family:'Pontiletra','Patrick Hand',cursive;line-height:1;}
-.ws-footer{border-top:1px dashed #e2e8f0;margin-top:14px;padding-top:9px;display:flex;justify-content:space-between;gap:16px;font-size:11px;color:#94a3b8;}
-`;
-}
-
-const labelCls =
-  "block text-[10px] font-extrabold text-slate-400 uppercase tracking-[0.8px] mb-1.5";
-const inputCls =
-  "w-full px-3 py-[9px] rounded-lg border-[1.5px] border-[#e2e8f0] text-base text-slate-900 bg-slate-50 outline-none box-border";
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
 
 export default function PontiletraPage() {
   const [mode, setMode] = useState<Mode>("single_name");
@@ -249,15 +120,18 @@ export default function PontiletraPage() {
   const [studentsText, setStudentsText] = useState(
     "Ana\nCarlos\nMariana\nJoão\nSofia",
   );
-  const [lines, setLines] = useState(3);
+  const [lines, setLines] = useState(7);
   const [title, setTitle] = useState("Meu Nome");
   const [subtitle, setSubtitle] = useState(
     "Trace as letras pontilhadas para praticar a escrita.",
   );
+  const [isPrinting, setIsPrinting] = useState(false);
 
   const students = parseStudents(studentsText);
   const safeLetter = normalizeLetter(letter);
-  const fontSize = mode === "single_letter" ? 56 : 68;
+  const fontSize =
+    mode === "single_letter" ? FONT_SIZE_LETTER_MODE : FONT_SIZE_DEFAULT;
+  const isPhrase = mode === "phrase" || mode === "single_name";
 
   function getItems(): WorksheetItem[] {
     switch (mode) {
@@ -271,112 +145,21 @@ export default function PontiletraPage() {
         return students.length
           ? students.map((s) => ({ text: s, label: s }))
           : [{ text: "Aluno", label: "Aluno" }];
-      default:
-        return [{ text: "" }];
     }
   }
 
-  function buildRows(item: WorksheetItem): string {
-    const isPhrase = mode === "phrase" || mode === "single_name";
-    if (mode === "single_letter") {
-      return [
-        tracingRowStrLetter(safeLetter),
-        ...Array.from({ length: lines }, () =>
-          tracingRowStr(item.text, fontSize, true, isPhrase),
-        ),
-      ].join("");
-    }
-    return [
-      tracingRowStr(item.text, fontSize, false, isPhrase),
-      ...Array.from({ length: lines - 1 }, () =>
-        tracingRowStr(item.text, fontSize, true, isPhrase),
-      ),
-    ].join("");
-  }
-
-  function buildPrintHTML(items: WorksheetItem[], printCSS: string): string {
-    const pages = items
-      .map((item, i) => {
-        const badge = item.label
-          ? `<div class="student-badge">✦ ${escXML(item.label)}</div>`
-          : "";
-        const pb = i < items.length - 1 ? "page-break-after:always;" : "";
-        return `<section class="ws-page" style="${pb}">
-  <div class="ws-header">
-    <div>
-      <div class="ws-title">${escXML(title)}</div>
-      <div class="ws-subtitle">${escXML(subtitle)}</div>
-    </div>
-    <div aria-hidden="true" style="font-size:36px;line-height:1;">✏️</div>
-  </div>
-  <main class="ws-content">
-    <div class="tracing-block">${badge}${buildRows(item)}</div>
-  </main>
-  <div class="ws-footer">
-    <span>Data: ___/___/______</span>
-    <span>Nome: _______________________</span>
-  </div>
-</section>`;
-      })
-      .join("");
-
-    return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
-<title>Atividade de Caligrafia</title>
-<link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Patrick+Hand&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
-<style>${printCSS}</style></head>
-<body>${pages}</body></html>`;
-  }
+  // Computed once — shared between preview and print so they always match
+  const items = getItems();
 
   async function handlePrint() {
-    let fontBase64 = "";
+    if (isPrinting) return;
+    setIsPrinting(true);
     try {
-      const res = await fetch("/pontiletra.ttf");
-      const buf = await res.arrayBuffer();
-      const bytes = new Uint8Array(buf);
-      let binary = "";
-      for (let i = 0; i < bytes.length; i++)
-        binary += String.fromCharCode(bytes[i]);
-      fontBase64 = btoa(binary);
-    } catch {
-      // fall back to URL reference
+      await printWorksheet({ items, title, subtitle, mode, safeLetter, lines });
+    } finally {
+      setIsPrinting(false);
     }
-    const html = buildPrintHTML(getItems(), buildPrintCSS(fontBase64));
-    const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-
-    const iframe = document.createElement("iframe");
-    iframe.style.cssText =
-      "position:fixed;top:0;left:0;width:0;height:0;border:none;opacity:0;";
-    document.body.appendChild(iframe);
-    iframe.src = url;
-
-    iframe.addEventListener(
-      "load",
-      () => {
-        const win = iframe.contentWindow;
-        if (!win) return;
-        const finish = () => {
-          win.print();
-          setTimeout(() => {
-            document.body.removeChild(iframe);
-            URL.revokeObjectURL(url);
-          }, 1000);
-        };
-        if (win.document.fonts) {
-          void win.document.fonts.ready.then(
-            () => setTimeout(finish, 150),
-            () => setTimeout(finish, 500),
-          );
-        } else {
-          setTimeout(finish, 800);
-        }
-      },
-      { once: true },
-    );
   }
-
-  const previewItems = getItems();
-  const isPhrase = mode === "phrase" || mode === "single_name";
 
   return (
     <div
@@ -407,19 +190,19 @@ export default function PontiletraPage() {
       </header>
 
       {/* Body */}
-      <div className="px-3 py-5 sm:px-6 sm:py-7 max-w-[1200px] mx-auto">
+      <div className="px-3 py-5 sm:px-6 sm:py-7 max-w-300 mx-auto">
         <div className="flex gap-4 md:gap-6 items-start flex-wrap">
           {/* Config panel */}
-          <div className="bg-white rounded-2xl px-[22px] py-6 shadow-[0_1px_4px_rgba(0,0,0,0.06),0_4px_16px_rgba(0,0,0,0.08)] flex-[1_1_292px] max-w-[340px] w-full">
+          <div className="bg-white rounded-2xl px-5.5 py-6 shadow-[0_1px_4px_rgba(0,0,0,0.06),0_4px_16px_rgba(0,0,0,0.08)] flex-[1_1_292px] max-w-85 w-full">
             <p className={`${labelCls} mb-2.5`}>Tipo de Atividade</p>
-            <div className="flex flex-wrap gap-1.5 mb-[18px]">
+            <div className="flex flex-wrap gap-1.5 mb-4.5">
               {(Object.keys(MODE_LABELS) as Mode[]).map((m) => (
                 <button
                   key={m}
                   type="button"
                   aria-pressed={mode === m}
                   onClick={() => setMode(m)}
-                  className={`px-3 py-[5px] rounded-full border-[1.5px] font-extrabold text-[11px] cursor-pointer leading-relaxed transition-colors ${
+                  className={`px-3 py-1.25 rounded-full border-[1.5px] font-extrabold text-[11px] cursor-pointer leading-relaxed transition-colors ${
                     mode === m
                       ? "border-[#0284c7] bg-[#0284c7] text-white"
                       : "border-[#dbeafe] bg-[#f0f9ff] text-[#0369a1]"
@@ -459,7 +242,7 @@ export default function PontiletraPage() {
                   value={letter}
                   onChange={(e) => setLetter(normalizeLetter(e.target.value))}
                   maxLength={4}
-                  className="px-3 py-[9px] rounded-lg border-[1.5px] border-[#e2e8f0] text-[30px] text-center text-slate-900 bg-slate-50 outline-none box-border w-[70px]"
+                  className="px-3 py-2.25 rounded-lg border-[1.5px] border-[#e2e8f0] text-[30px] text-center text-slate-900 bg-slate-50 outline-none box-border w-17.5"
                   style={{ fontFamily: "'Patrick Hand', cursive" }}
                 />
                 <div className="mt-3">
@@ -472,7 +255,7 @@ export default function PontiletraPage() {
                     min={3}
                     max={20}
                     value={letterRepeat}
-                    onChange={(e) => setLetterRepeat(+e.target.value)}
+                    onChange={(e) => setLetterRepeat(Number(e.target.value))}
                     className="w-full accent-[#0284c7]"
                   />
                 </div>
@@ -555,9 +338,9 @@ export default function PontiletraPage() {
                 id="line-count"
                 type="range"
                 min={1}
-                max={6}
+                max={8}
                 value={lines}
-                onChange={(e) => setLines(+e.target.value)}
+                onChange={(e) => setLines(Number(e.target.value))}
                 className="w-full accent-[#0284c7]"
               />
             </div>
@@ -565,21 +348,23 @@ export default function PontiletraPage() {
             <button
               type="button"
               onClick={handlePrint}
-              className="w-full py-3 rounded-[10px] border-none text-white text-base cursor-pointer tracking-[0.4px] mb-2 shadow-[0_2px_8px_rgba(2,132,199,0.35)]"
+              disabled={isPrinting}
+              className="w-full py-3 rounded-[10px] border-none text-white text-base cursor-pointer tracking-[0.4px] mb-2 shadow-[0_2px_8px_rgba(2,132,199,0.35)] disabled:opacity-60 disabled:cursor-not-allowed"
               style={{
                 background: "linear-gradient(135deg, #0284c7 0%, #0ea5e9 100%)",
                 fontFamily: "'Fredoka One', cursive",
               }}
             >
-              🖨️ Imprimir
+              {isPrinting ? "Preparando..." : "🖨️ Imprimir"}
             </button>
             <button
               type="button"
               onClick={handlePrint}
-              className="w-full py-[11px] rounded-[10px] border-[1.5px] border-[#bae6fd] bg-[#f0f9ff] text-[#0284c7] text-base cursor-pointer"
+              disabled={isPrinting}
+              className="w-full py-[11px] rounded-[10px] border-[1.5px] border-[#bae6fd] bg-[#f0f9ff] text-[#0284c7] text-base cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
               style={{ fontFamily: "'Fredoka One', cursive" }}
             >
-              📄 Salvar PDF
+              {isPrinting ? "Preparando..." : "📄 Salvar PDF"}
             </button>
           </div>
 
@@ -610,24 +395,27 @@ export default function PontiletraPage() {
               </div>
               <div className="border-t-2 border-[#bae6fd] mb-4" />
 
-              {previewItems.map((item, i) => (
+              {items.map((item, i) => (
                 <div key={i} className="mb-3.5">
-                  {"label" in item && item.label && (
+                  {item.label && (
                     <div className="text-[10px] font-extrabold text-[#0ea5e9] uppercase tracking-[0.8px] mb-1">
                       ✦ {item.label}
                     </div>
                   )}
                   {mode === "single_letter" ? (
                     <>
-                      <TracingRowLetter letter={safeLetter} />
-                      {/* {Array.from({ length: lines }, (_, j) => (
+                      <TracingRow
+                        text={safeLetter}
+                        fontSize={FONT_SIZE_LETTER_EXAMPLE}
+                      />
+                      {Array.from({ length: lines }, (_, j) => (
                         <TracingRow
                           key={j}
                           text={item.text}
                           fontSize={fontSize}
                           dim
                         />
-                      ))} */}
+                      ))}
                     </>
                   ) : (
                     <>
@@ -636,7 +424,7 @@ export default function PontiletraPage() {
                         fontSize={fontSize}
                         redFirstLetter={isPhrase}
                       />
-                      {/* {Array.from({ length: lines - 1 }, (_, j) => (
+                      {Array.from({ length: lines - 1 }, (_, j) => (
                         <TracingRow
                           key={j}
                           text={item.text}
@@ -644,7 +432,7 @@ export default function PontiletraPage() {
                           dim
                           redFirstLetter={isPhrase}
                         />
-                      ))} */}
+                      ))}
                     </>
                   )}
                 </div>
