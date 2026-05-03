@@ -26,8 +26,11 @@ export const FONT_SIZE_LETTER_MODE = 56; // tracing rows in single_letter mode
 export const FONT_SIZE_DEFAULT = 68; // all other modes
 export const ROW_EXTRA_HEIGHT = 38; // added to fontSize to derive row height
 export const TILDE_FONT_SCALE = 0.8; // tilde accent rendered at 60% of base font size
-export const LINE_COLOR = "#93c5fd";
-export const CELL_BORDER_COLOR = "#60a5fa";
+export const LINE_COLOR = "#9ca3af";
+export const CELL_BORDER_COLOR = "#4b5563";
+export const TRACING_FIT_CONTENT_WIDTH = 640;
+export const TRACING_MIN_FONT_SIZE = 18;
+export const TRACING_CELL_FONT_RATIO = 1.85;
 
 export function normalizeText(value: string, fallback: string): string {
   return value.trim() || fallback;
@@ -39,6 +42,22 @@ export function normalizeLetter(value: string): string {
 
 export function repeatedLetterLine(letter: string, repeat: number): string {
   return letter.repeat(repeat);
+}
+
+export function fitTracingFontSize(
+  text: string,
+  requestedFontSize: number,
+  availableWidth = TRACING_FIT_CONTENT_WIDTH,
+): number {
+  const charCount = Math.max(1, Array.from(text).length);
+  const fittedSize = Math.floor(
+    (availableWidth / charCount) * TRACING_CELL_FONT_RATIO,
+  );
+
+  return Math.min(
+    requestedFontSize,
+    Math.max(TRACING_MIN_FONT_SIZE, fittedSize),
+  );
 }
 
 export function parseStudents(value: string): string[] {

@@ -6,6 +6,9 @@ import {
   FONT_SIZE_LETTER_MODE,
   ROW_EXTRA_HEIGHT,
   TILDE_FONT_SCALE,
+  LINE_COLOR,
+  CELL_BORDER_COLOR,
+  fitTracingFontSize,
 } from "./worksheet";
 import type { Mode, WorksheetImage, WorksheetItem } from "./worksheet";
 
@@ -30,14 +33,15 @@ export function buildTracingRowStr(
   redFirstLetter = false,
   blackAndWhite = false,
 ): string {
-  const tc = blackAndWhite ? (dim ? "#9ca3af" : "#111827") : dim ? "#c0cfe8" : "#1e293b";
-  const rowH = fontSize + ROW_EXTRA_HEIGHT;
+  const tc = dim ? "#4b5563" : "#111827";
+  const fittedFontSize = fitTracingFontSize(text, fontSize);
+  const rowH = fittedFontSize + ROW_EXTRA_HEIGHT;
   const cells = Array.from(text)
     .map((char, i) => {
       const color = redFirstLetter && i === 0 && !blackAndWhite ? "#dc2626" : tc;
       const { base, hasTilde } = decomposeTilde(char);
-      const tilde = hasTilde ? buildTildeSpanStr(base, fontSize, color) : "";
-      return `<div class="letter-cell"><span class="letter-char" style="position:relative;display:inline-block;font-size:${fontSize}px;color:${color}">${escXML(base)}${tilde}</span></div>`;
+      const tilde = hasTilde ? buildTildeSpanStr(base, fittedFontSize, color) : "";
+      return `<div class="letter-cell"><span class="letter-char" style="position:relative;display:inline-block;font-size:${fittedFontSize}px;color:${color}">${escXML(base)}${tilde}</span></div>`;
     })
     .join("");
   return `<div class="tracing-row" style="height:${rowH}px">${cells}</div>`;
@@ -92,22 +96,19 @@ export function buildRowsStr(
 // Full document builder
 // ---------------------------------------------------------------------------
 
-export function buildPrintCSS(
-  fontBase64: string,
-  blackAndWhite: boolean,
-): string {
+export function buildPrintCSS(fontBase64: string): string {
   const src = fontBase64
     ? `url('data:font/truetype;base64,${fontBase64}') format('truetype')`
     : `url('/pontiletra.ttf') format('truetype')`;
-  const titleColor = blackAndWhite ? "#111827" : "#0369a1";
-  const subtitleColor = blackAndWhite ? "#4b5563" : "#64748b";
-  const headerBorderColor = blackAndWhite ? "#6b7280" : "#bae6fd";
-  const studentBadgeColor = blackAndWhite ? "#374151" : "#0ea5e9";
-  const lineColor = blackAndWhite ? "#9ca3af" : "#93c5fd";
-  const cellBorderColor = blackAndWhite ? "#4b5563" : "#60a5fa";
-  const pictureNameColor = blackAndWhite ? "#111827" : "#0369a1";
-  const footerColor = blackAndWhite ? "#6b7280" : "#94a3b8";
-  const imageFilter = blackAndWhite ? "filter:grayscale(1) contrast(1.05);" : "";
+  const titleColor = "#111827";
+  const subtitleColor = "#4b5563";
+  const headerBorderColor = "#6b7280";
+  const studentBadgeColor = "#374151";
+  const lineColor = LINE_COLOR;
+  const cellBorderColor = CELL_BORDER_COLOR;
+  const pictureNameColor = "#111827";
+  const footerColor = "#6b7280";
+  const imageFilter = "filter:grayscale(1) contrast(1.05);";
   return `@font-face{font-family:'Pontiletra';src:${src};font-display:block;}
 @page{size:A4 portrait;margin:1.5cm;}
 *{box-sizing:border-box;margin:0;padding:0;}
@@ -155,7 +156,7 @@ export function buildPrintHTML({
   printCSS,
   blackAndWhite,
 }: PrintHTMLOptions): string {
-  const headerIcon = blackAndWhite ? "✎" : "✏️";
+  const headerIcon = "✎";
   const pages = items
     .map((item, i) => {
       const badge = item.label
@@ -168,7 +169,7 @@ export function buildPrintHTML({
       <div class="ws-title">${escXML(title)}</div>
       <div class="ws-subtitle">${escXML(subtitle)}</div>
     </div>
-    <div aria-hidden="true" style="font-size:36px;line-height:1;color:${blackAndWhite ? "#111827" : "inherit"};">${headerIcon}</div>
+    <div aria-hidden="true" style="font-size:36px;line-height:1;color:#111827;">${headerIcon}</div>
   </div>
   <main class="ws-content">
     <div class="tracing-block">${badge}${buildRowsStr(item, mode, safeLetter, lines, blackAndWhite)}</div>
@@ -303,7 +304,7 @@ export async function printWorksheet(
     ...options,
     items,
     blackAndWhite,
-    printCSS: buildPrintCSS(fontBase64, blackAndWhite),
+    printCSS: buildPrintCSS(fontBase64),
   });
   const blob = new Blob([html], { type: "text/html;charset=utf-8" });
   const url = URL.createObjectURL(blob);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   type Mode,
   type WorksheetItem,
@@ -12,9 +12,11 @@ import {
   FONT_SIZE_LETTER_MODE,
   ROW_EXTRA_HEIGHT,
   TILDE_FONT_SCALE,
+  TRACING_FIT_CONTENT_WIDTH,
   normalizeText,
   normalizeLetter,
   repeatedLetterLine,
+  fitTracingFontSize,
   parseStudents,
   decomposeTilde,
 } from "@/lib/worksheet";
@@ -27,9 +29,12 @@ import { Image } from "@/components/custom-image";
 // ---------------------------------------------------------------------------
 
 const labelCls =
-  "block text-[10px] font-extrabold text-slate-400 uppercase tracking-[0.8px] mb-1.5";
+  "block text-[10px] font-extrabold text-slate-500 uppercase tracking-[0.8px] mb-1.5";
 const inputCls =
-  "w-full px-3 py-[9px] rounded-lg border-[1.5px] border-[#e2e8f0] text-base text-slate-900 bg-slate-50 outline-none box-border";
+  "w-full rounded-lg border-[1.5px] border-slate-200 bg-white px-3 py-[9px] text-base text-slate-900 outline-none box-border shadow-[inset_0_1px_0_rgba(15,23,42,0.03)] transition focus:border-[#0284c7] focus:ring-2 focus:ring-sky-100";
+const sectionDividerCls = "border-t border-slate-200 pt-4";
+const toolButtonCls =
+  "inline-flex h-9 items-center justify-center rounded-lg border-[1.5px] px-3 text-xs font-extrabold leading-none transition disabled:cursor-not-allowed disabled:opacity-60";
 
 // ---------------------------------------------------------------------------
 // TracingRow — renders a single guide-lined row for the live preview.
@@ -42,27 +47,24 @@ function TracingRow({
   dim = false,
   redFirstLetter = false,
   blackAndWhite = false,
+  availableWidth,
 }: {
   text: string;
   fontSize: number;
   dim?: boolean;
   redFirstLetter?: boolean;
   blackAndWhite?: boolean;
+  availableWidth?: number;
 }) {
-  const lineColor = blackAndWhite ? "#9ca3af" : LINE_COLOR;
-  const cellBorderColor = blackAndWhite ? "#4b5563" : CELL_BORDER_COLOR;
-  const tc = blackAndWhite
-    ? dim
-      ? "#9ca3af"
-      : "#111827"
-    : dim
-      ? "#c0cfe8"
-      : "#1e293b";
+  const lineColor = LINE_COLOR;
+  const cellBorderColor = CELL_BORDER_COLOR;
+  const fittedFontSize = fitTracingFontSize(text, fontSize, availableWidth);
+  const tc = dim ? "#4b5563" : "#111827";
   return (
     <div
-      className="relative flex mb-0.5"
+      className="relative mb-0.5 flex"
       style={{
-        height: fontSize + ROW_EXTRA_HEIGHT,
+        height: fittedFontSize + ROW_EXTRA_HEIGHT,
         borderTop: `1px solid ${lineColor}`,
         borderBottom: `1.5px solid ${lineColor}`,
       }}
@@ -78,7 +80,7 @@ function TracingRow({
         return (
           <div
             key={i}
-            className="flex-1 flex items-end justify-center pb-2 relative z-[1]"
+            className="relative z-[1] flex min-w-0 flex-1 items-end justify-center pb-2"
             style={{
               border: `2px solid ${cellBorderColor}`,
               marginLeft: i === 0 ? 0 : -2,
@@ -89,7 +91,7 @@ function TracingRow({
                 position: "relative",
                 display: "inline-block",
                 fontFamily: "var(--font-pontiletra), 'Patrick Hand', cursive",
-                fontSize,
+                fontSize: fittedFontSize,
                 color,
                 lineHeight: 1,
               }}
@@ -104,7 +106,7 @@ function TracingRow({
                     transform: "translateX(-50%)",
                     fontFamily:
                       "var(--font-pontiletra), 'Patrick Hand', cursive",
-                    fontSize: Math.round(fontSize * TILDE_FONT_SCALE),
+                    fontSize: Math.round(fittedFontSize * TILDE_FONT_SCALE),
                     lineHeight: 1,
                     color,
                   }}
@@ -124,10 +126,12 @@ function SingleLetterHero({
   letter,
   image,
   blackAndWhite = false,
+  availableWidth,
 }: {
   letter: string;
   image?: WorksheetItem["image"];
   blackAndWhite?: boolean;
+  availableWidth?: number;
 }) {
   if (!image) {
     return (
@@ -135,6 +139,7 @@ function SingleLetterHero({
         text={letter}
         fontSize={FONT_SIZE_LETTER_EXAMPLE}
         blackAndWhite={blackAndWhite}
+        availableWidth={availableWidth}
       />
     );
   }
@@ -145,10 +150,11 @@ function SingleLetterHero({
         text={letter}
         fontSize={FONT_SIZE_LETTER_EXAMPLE}
         blackAndWhite={blackAndWhite}
+        availableWidth={availableWidth}
       />
       <div
         className="flex h-42 flex-col overflow-hidden border-2 bg-white"
-        style={{ borderColor: blackAndWhite ? "#4b5563" : CELL_BORDER_COLOR }}
+        style={{ borderColor: CELL_BORDER_COLOR }}
       >
         <div className="min-h-0 flex-1 p-1">
           <Image
@@ -158,15 +164,15 @@ function SingleLetterHero({
             height={136}
             className="h-full w-full object-contain"
             style={{
-              filter: blackAndWhite ? "grayscale(1) contrast(1.05)" : undefined,
+              filter: "grayscale(1) contrast(1.05)",
             }}
           />
         </div>
         <div
           className="border-t px-1.5 py-1.5 text-center text-sm font-extrabold leading-tight [overflow-wrap:anywhere]"
           style={{
-            borderTopColor: blackAndWhite ? "#9ca3af" : "#bae6fd",
-            color: blackAndWhite ? "#111827" : "#0369a1",
+            borderTopColor: LINE_COLOR,
+            color: "#111827",
           }}
         >
           {image.label}
@@ -181,6 +187,7 @@ function SingleLetterHero({
 // ---------------------------------------------------------------------------
 
 export default function PontiletraPage() {
+  const paperRef = useRef<HTMLDivElement>(null);
   const [mode, setMode] = useState<Mode>("single_name");
   const [name, setName] = useState("Carolina");
   const [letter, setLetter] = useState("A");
@@ -200,6 +207,9 @@ export default function PontiletraPage() {
     "Trace as letras pontilhadas para praticar a escrita.",
   );
   const [isPrinting, setIsPrinting] = useState(false);
+  const [paperContentWidth, setPaperContentWidth] = useState(
+    TRACING_FIT_CONTENT_WIDTH,
+  );
 
   const students = parseStudents(studentsText);
   const safeLetter = normalizeLetter(letter);
@@ -227,9 +237,9 @@ export default function PontiletraPage() {
   const fontSize =
     mode === "single_letter" ? FONT_SIZE_LETTER_MODE : FONT_SIZE_DEFAULT;
   const isPhrase = mode === "phrase" || mode === "single_name";
-  const previewAccentColor = blackAndWhitePrint ? "#111827" : "#0369a1";
-  const previewSoftLineColor = blackAndWhitePrint ? "#6b7280" : "#bae6fd";
-  const previewBadgeColor = blackAndWhitePrint ? "#374151" : "#0ea5e9";
+  const previewAccentColor = "#111827";
+  const previewSoftLineColor = "#6b7280";
+  const previewBadgeColor = "#374151";
 
   function getItems(): WorksheetItem[] {
     switch (mode) {
@@ -253,6 +263,30 @@ export default function PontiletraPage() {
 
   // Computed once — shared between preview and print so they always match
   const items = getItems();
+
+  useEffect(() => {
+    const paper = paperRef.current;
+    if (!paper) return;
+    const measuredPaper = paper;
+
+    function updatePaperContentWidth() {
+      const style = window.getComputedStyle(measuredPaper);
+      const horizontalPadding =
+        Number.parseFloat(style.paddingLeft) +
+        Number.parseFloat(style.paddingRight);
+
+      setPaperContentWidth(
+        Math.max(180, measuredPaper.clientWidth - horizontalPadding),
+      );
+    }
+
+    updatePaperContentWidth();
+
+    const observer = new ResizeObserver(updatePaperContentWidth);
+    observer.observe(measuredPaper);
+
+    return () => observer.disconnect();
+  }, []);
 
   function handleLetterChange(value: string) {
     const chars = Array.from(value.trim().toLocaleUpperCase("pt-BR"));
@@ -295,49 +329,74 @@ export default function PontiletraPage() {
 
   return (
     <div
-      className="min-h-screen bg-[#eef2f7]"
-      style={{ fontFamily: "'Nunito', sans-serif" }}
+      className="min-h-screen bg-[#f5f7fb] text-slate-900"
+      style={{
+        fontFamily: "'Nunito', sans-serif",
+        backgroundImage:
+          "linear-gradient(90deg, rgba(15, 118, 110, 0.05) 1px, transparent 1px), linear-gradient(rgba(2, 132, 199, 0.05) 1px, transparent 1px)",
+        backgroundSize: "28px 28px",
+      }}
     >
       {/* Header */}
       <header
-        className="flex items-center gap-3.5 px-4 py-4 md:px-8 shadow-[0_2px_12px_rgba(0,0,0,0.2)]"
+        className="border-b border-white/10 text-white shadow-[0_6px_24px_rgba(15,23,42,0.16)]"
         style={{
-          background: "linear-gradient(135deg, #0c4a6e 0%, #0284c7 100%)",
+          background:
+            "linear-gradient(135deg, #0f766e 0%, #0c4a6e 54%, #0f172a 100%)",
         }}
       >
-        <span aria-hidden="true" className="text-3xl leading-none">
-          ✏️
-        </span>
-        <div>
-          <h1
-            className="text-[22px] text-white tracking-[0.5px] leading-tight"
-            style={{ fontFamily: "'Fredoka One', cursive" }}
-          >
-            Pontiletra
-          </h1>
-          <p className="text-xs text-[#bae6fd] mt-0.5">
-            Gerador de folhas de caligrafia
-          </p>
+        <div className="mx-auto flex max-w-[1220px] flex-col gap-4 px-4 py-4 sm:px-6 md:flex-row md:items-center md:justify-between md:px-8">
+          <div className="flex min-w-0 items-center gap-3.5">
+            <span
+              aria-hidden="true"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-white/10 text-[27px] leading-none shadow-[inset_0_0_0_1px_rgba(255,255,255,0.24)]"
+            >
+              ✎
+            </span>
+            <div className="min-w-0">
+              <h1
+                className="text-[24px] leading-tight tracking-[0.4px] text-white"
+                style={{ fontFamily: "'Fredoka One', cursive" }}
+              >
+                Pontiletra
+              </h1>
+              <p className="mt-0.5 text-sm font-bold text-sky-100">
+                Gerador de folhas de caligrafia para sala de aula
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2 text-[11px] font-extrabold uppercase tracking-[0.7px] text-white/90">
+            <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5">
+              A4
+            </span>
+            <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5">
+              Prévia ao vivo
+            </span>
+            <span className="rounded-full border border-white/20 bg-amber-300 px-3 py-1.5 text-slate-900">
+              PDF
+            </span>
+          </div>
         </div>
       </header>
 
       {/* Body */}
-      <div className="px-3 py-5 sm:px-6 sm:py-7 max-w-300 mx-auto">
-        <div className="flex gap-4 md:gap-6 items-start flex-wrap">
+      <main className="mx-auto max-w-[1220px] px-4 py-5 sm:px-6 sm:py-8 md:px-8">
+        <div className="grid gap-5 lg:grid-cols-[340px_minmax(0,1fr)] lg:items-start">
           {/* Config panel */}
-          <div className="bg-white rounded-2xl px-5.5 py-6 shadow-[0_1px_4px_rgba(0,0,0,0.06),0_4px_16px_rgba(0,0,0,0.08)] flex-[1_1_292px] max-w-85 w-full">
+          <aside className="w-full rounded-lg border border-slate-200 bg-white/95 p-4 shadow-[0_1px_2px_rgba(15,23,42,0.05),0_12px_32px_rgba(15,23,42,0.08)] sm:p-5 lg:sticky lg:top-5">
             <p className={`${labelCls} mb-2.5`}>Tipo de Atividade</p>
-            <div className="flex flex-wrap gap-1.5 mb-4.5">
+            <div className="mb-5 flex flex-wrap gap-1.5">
               {(Object.keys(MODE_LABELS) as Mode[]).map((m) => (
                 <button
                   key={m}
                   type="button"
                   aria-pressed={mode === m}
                   onClick={() => setMode(m)}
-                  className={`px-3 py-1.25 rounded-full border-[1.5px] font-extrabold text-[11px] cursor-pointer leading-relaxed transition-colors ${
+                  className={`rounded-full border-[1.5px] px-3 py-1.5 text-[11px] font-extrabold leading-relaxed transition-colors focus:outline-none focus:ring-2 focus:ring-sky-100 ${
                     mode === m
-                      ? "border-[#0284c7] bg-[#0284c7] text-white"
-                      : "border-[#dbeafe] bg-[#f0f9ff] text-[#0369a1]"
+                      ? "border-[#0f766e] bg-[#0f766e] text-white shadow-[0_4px_12px_rgba(15,118,110,0.22)]"
+                      : "border-slate-200 bg-white text-slate-600 hover:border-sky-200 hover:bg-sky-50 hover:text-[#0369a1]"
                   }`}
                   style={{ fontFamily: "'Nunito', sans-serif" }}
                 >
@@ -376,7 +435,7 @@ export default function PontiletraPage() {
                     onChange={(e) => handleLetterChange(e.target.value)}
                     onFocus={(e) => e.currentTarget.select()}
                     maxLength={2}
-                    className="h-13 w-14 rounded-lg border-[1.5px] border-[#e2e8f0] bg-slate-50 px-2 text-center text-[30px] text-slate-900 outline-none box-border"
+                    className="h-13 w-14 rounded-lg border-[1.5px] border-slate-200 bg-white px-2 text-center text-[30px] text-slate-900 outline-none box-border transition focus:border-[#0284c7] focus:ring-2 focus:ring-sky-100"
                     style={{ fontFamily: "'Patrick Hand', cursive" }}
                   />
                   {alphabetItem && (
@@ -386,6 +445,7 @@ export default function PontiletraPage() {
                         alt={`${alphabetItem.letter} de ${alphabetItem.label}`}
                         width={44}
                         height={44}
+                        lazy={false}
                         className="h-11 w-11 object-contain"
                       />
                       <div className="min-w-0 text-sm font-extrabold text-slate-700">
@@ -407,8 +467,8 @@ export default function PontiletraPage() {
                         onClick={() => setLetter(item.letter)}
                         className={`flex aspect-square items-center justify-center rounded-md border-[1.5px] text-sm font-extrabold transition-colors ${
                           selected
-                            ? "border-[#0284c7] bg-[#0284c7] text-white"
-                            : "border-[#dbeafe] bg-[#f8fafc] text-[#0369a1] hover:bg-[#f0f9ff]"
+                            ? "border-[#0f766e] bg-[#0f766e] text-white shadow-[0_2px_8px_rgba(15,118,110,0.2)]"
+                            : "border-slate-200 bg-white text-[#0369a1] hover:border-sky-200 hover:bg-sky-50"
                         }`}
                         style={{ fontFamily: "'Nunito', sans-serif" }}
                       >
@@ -428,10 +488,10 @@ export default function PontiletraPage() {
                     max={20}
                     value={letterRepeat}
                     onChange={(e) => setLetterRepeat(Number(e.target.value))}
-                    className="w-full accent-[#0284c7]"
+                    className="w-full accent-[#0f766e]"
                   />
                 </div>
-                <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <div className="mt-4 border-t border-slate-200 pt-4">
                   <label
                     htmlFor="letter-image"
                     className="flex items-center gap-2 text-sm font-extrabold text-slate-700"
@@ -441,21 +501,21 @@ export default function PontiletraPage() {
                       type="checkbox"
                       checked={showLetterImage}
                       onChange={(e) => setShowLetterImage(e.target.checked)}
-                      className="h-4 w-4 accent-[#0284c7]"
+                      className="h-4 w-4 accent-[#0f766e]"
                     />
                     Imagem da letra
                   </label>
                   {showLetterImage && (
                     <>
-                      <div className="mt-3 grid grid-cols-2 gap-1.5 rounded-lg bg-white p-1">
+                      <div className="mt-3 grid grid-cols-2 gap-1.5 rounded-lg bg-slate-100 p-1">
                         <button
                           type="button"
                           aria-pressed={!useCustomLetterImage}
                           onClick={() => setUseCustomLetterImage(false)}
                           className={`rounded-md px-2 py-2 text-xs font-extrabold transition-colors ${
                             !useCustomLetterImage
-                              ? "bg-[#0284c7] text-white"
-                              : "text-[#0369a1] hover:bg-[#f0f9ff]"
+                              ? "bg-white text-[#0f766e] shadow-sm"
+                              : "text-slate-500 hover:bg-white/70 hover:text-[#0369a1]"
                           }`}
                         >
                           Alfabeto
@@ -466,8 +526,8 @@ export default function PontiletraPage() {
                           onClick={() => setUseCustomLetterImage(true)}
                           className={`rounded-md px-2 py-2 text-xs font-extrabold transition-colors ${
                             useCustomLetterImage
-                              ? "bg-[#0284c7] text-white"
-                              : "text-[#0369a1] hover:bg-[#f0f9ff]"
+                              ? "bg-white text-[#0f766e] shadow-sm"
+                              : "text-slate-500 hover:bg-white/70 hover:text-[#0369a1]"
                           }`}
                         >
                           Personalizada
@@ -508,11 +568,11 @@ export default function PontiletraPage() {
                               onChange={(e) =>
                                 handleCustomImageChange(e.target.files?.[0])
                               }
-                              className="block w-full cursor-pointer rounded-lg border-[1.5px] border-[#e2e8f0] bg-white text-xs font-bold text-slate-600 file:mr-3 file:border-0 file:bg-[#e0f2fe] file:px-3 file:py-2.5 file:text-xs file:font-extrabold file:text-[#0369a1]"
+                              className="block w-full cursor-pointer rounded-lg border-[1.5px] border-slate-200 bg-white text-xs font-bold text-slate-600 file:mr-3 file:border-0 file:bg-emerald-50 file:px-3 file:py-2.5 file:text-xs file:font-extrabold file:text-[#0f766e]"
                             />
                           </div>
                           {customLetterImage && (
-                            <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-2">
+                            <div className="flex items-center gap-3 border-t border-slate-200 pt-3">
                               <Image
                                 src={customLetterImage}
                                 alt={customImageLabel}
@@ -584,192 +644,233 @@ export default function PontiletraPage() {
               </div>
             )}
 
-            <div className="border-t border-slate-100 mt-1 mb-4" />
-            <p className={`${labelCls} mb-2.5`}>Configurar Folha</p>
+            <div className={`${sectionDividerCls} mt-1`}>
+              <p className={`${labelCls} mb-2.5`}>Configurar Folha</p>
 
-            <div className="mb-4">
-              <label htmlFor="worksheet-title" className={labelCls}>
-                Título
-              </label>
-              <input
-                id="worksheet-title"
-                type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className={`${inputCls} text-sm`}
-                style={{ fontFamily: "'Nunito', sans-serif" }}
-              />
-            </div>
+              <div className="mb-4">
+                <label htmlFor="worksheet-title" className={labelCls}>
+                  Título
+                </label>
+                <input
+                  id="worksheet-title"
+                  type="text"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  className={`${inputCls} text-sm`}
+                  style={{ fontFamily: "'Nunito', sans-serif" }}
+                />
+              </div>
 
-            <div className="mb-4">
-              <label htmlFor="worksheet-subtitle" className={labelCls}>
-                Instrução
-              </label>
-              <input
-                id="worksheet-subtitle"
-                type="text"
-                value={subtitle}
-                onChange={(e) => setSubtitle(e.target.value)}
-                className={`${inputCls} text-[13px]`}
-                style={{ fontFamily: "'Nunito', sans-serif" }}
-              />
-            </div>
+              <div className="mb-4">
+                <label htmlFor="worksheet-subtitle" className={labelCls}>
+                  Instrução
+                </label>
+                <input
+                  id="worksheet-subtitle"
+                  type="text"
+                  value={subtitle}
+                  onChange={(e) => setSubtitle(e.target.value)}
+                  className={`${inputCls} text-[13px]`}
+                  style={{ fontFamily: "'Nunito', sans-serif" }}
+                />
+              </div>
 
-            <div className="mb-4">
-              <label htmlFor="line-count" className={labelCls}>
-                Linhas de treino: {lines}
-              </label>
-              <input
-                id="line-count"
-                type="range"
-                min={1}
-                max={8}
-                value={lines}
-                onChange={(e) => setLines(Number(e.target.value))}
-                className="w-full accent-[#0284c7]"
-              />
-            </div>
+              <div className="mb-4">
+                <label htmlFor="line-count" className={labelCls}>
+                  Linhas de treino: {lines}
+                </label>
+                <input
+                  id="line-count"
+                  type="range"
+                  min={1}
+                  max={8}
+                  value={lines}
+                  onChange={(e) => setLines(Number(e.target.value))}
+                  className="w-full accent-[#0f766e]"
+                />
+              </div>
 
-            <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
               <label
                 htmlFor="black-and-white-print"
-                className="flex items-center gap-2 text-sm font-extrabold text-slate-700"
+                className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-extrabold text-slate-700"
               >
+                <span>Preto e branco</span>
                 <input
                   id="black-and-white-print"
                   type="checkbox"
                   checked={blackAndWhitePrint}
                   onChange={(e) => setBlackAndWhitePrint(e.target.checked)}
-                  className="h-4 w-4 accent-[#0284c7]"
+                  className="h-4 w-4 accent-[#0f766e]"
                 />
-                Preto e branco
               </label>
             </div>
 
-            <button
-              type="button"
-              onClick={handlePrint}
-              disabled={isPrinting}
-              className="w-full py-3 rounded-[10px] border-none text-white text-base cursor-pointer tracking-[0.4px] mb-2 shadow-[0_2px_8px_rgba(2,132,199,0.35)] disabled:opacity-60 disabled:cursor-not-allowed"
-              style={{
-                background: "linear-gradient(135deg, #0284c7 0%, #0ea5e9 100%)",
-                fontFamily: "'Fredoka One', cursive",
-              }}
-            >
-              {isPrinting ? "Preparando..." : "🖨️ Imprimir"}
-            </button>
-            <button
-              type="button"
-              onClick={handlePrint}
-              disabled={isPrinting}
-              className="w-full py-[11px] rounded-[10px] border-[1.5px] border-[#bae6fd] bg-[#f0f9ff] text-[#0284c7] text-base cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-              style={{ fontFamily: "'Fredoka One', cursive" }}
-            >
-              {isPrinting ? "Preparando..." : "📄 Salvar PDF"}
-            </button>
-          </div>
+            <div className="grid gap-2 border-t border-slate-200 pt-4 sm:grid-cols-2 lg:grid-cols-1">
+              <button
+                type="button"
+                onClick={handlePrint}
+                disabled={isPrinting}
+                className={`${toolButtonCls} h-11 border-[#0f766e] bg-[#0f766e] text-sm text-white shadow-[0_6px_16px_rgba(15,118,110,0.24)] hover:bg-[#115e59]`}
+                style={{ fontFamily: "'Fredoka One', cursive" }}
+              >
+                <span aria-hidden="true" className="mr-2 text-base">
+                  ⎙
+                </span>
+                {isPrinting ? "Preparando..." : "Imprimir"}
+              </button>
+              <button
+                type="button"
+                onClick={handlePrint}
+                disabled={isPrinting}
+                className={`${toolButtonCls} h-11 border-sky-200 bg-sky-50 text-sm text-[#0369a1] hover:border-sky-300 hover:bg-white`}
+                style={{ fontFamily: "'Fredoka One', cursive" }}
+              >
+                <span aria-hidden="true" className="mr-2 rounded bg-white px-1 py-0.5 text-[10px] text-[#0f766e]">
+                  PDF
+                </span>
+                {isPrinting ? "Preparando..." : "Salvar PDF"}
+              </button>
+            </div>
+          </aside>
 
           {/* Preview */}
-          <div className="flex-[1_1_500px] min-w-0 w-full">
-            <p className={`${labelCls} mb-3`}>Pré-visualização · A4</p>
+          <section className="min-w-0 w-full">
+            <div className="mb-3 flex items-end justify-between gap-3">
+              <p className={labelCls}>Pré-visualização · A4</p>
+              <span
+                className={`rounded-full border px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.7px] ${
+                  blackAndWhitePrint
+                    ? "border-slate-300 bg-slate-100 text-slate-600"
+                    : "border-emerald-200 bg-emerald-50 text-[#0f766e]"
+                }`}
+              >
+                {blackAndWhitePrint ? "Preto e branco" : "Colorida"}
+              </span>
+            </div>
 
-            {/* Paper */}
-            <div
-              className="bg-white rounded-[3px] px-5 py-6 sm:px-12 sm:py-10 shadow-[0_8px_40px_rgba(0,0,0,0.13),0_1px_4px_rgba(0,0,0,0.07)] max-w-[760px] w-full box-border"
-              style={{ fontFamily: "'Nunito', sans-serif" }}
-            >
-              <div className="flex items-start justify-between mb-3">
-                <div>
-                  <div
-                    className="text-[22px] uppercase tracking-[1px] leading-tight [overflow-wrap:anywhere]"
-                    style={{
-                      color: previewAccentColor,
-                      fontFamily: "'Fredoka One', cursive",
-                    }}
-                  >
-                    {title}
+            <div className="rounded-lg border border-slate-200 bg-[#e9eff4] p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.7),0_18px_40px_rgba(15,23,42,0.10)] sm:p-4">
+              {/* Paper */}
+              <div
+                ref={paperRef}
+                className="mx-auto w-full max-w-[760px] rounded-[3px] bg-white px-5 py-6 shadow-[0_12px_32px_rgba(15,23,42,0.15),0_1px_3px_rgba(15,23,42,0.09)] box-border sm:px-12 sm:py-10"
+                style={{ fontFamily: "'Nunito', sans-serif" }}
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div>
+                    <div
+                      className="text-[22px] uppercase tracking-[1px] leading-tight [overflow-wrap:anywhere]"
+                      style={{
+                        color: previewAccentColor,
+                        fontFamily: "'Fredoka One', cursive",
+                      }}
+                    >
+                      {title}
+                    </div>
+                    <div className="text-xs text-slate-500 italic mt-1 [overflow-wrap:anywhere]">
+                      {subtitle}
+                    </div>
                   </div>
-                  <div className="text-xs text-slate-500 italic mt-1 [overflow-wrap:anywhere]">
-                    {subtitle}
+                  <div
+                    aria-hidden="true"
+                    className="text-4xl leading-none ml-4"
+                    style={{ color: "#111827" }}
+                  >
+                    ✎
                   </div>
                 </div>
                 <div
-                  aria-hidden="true"
-                  className="text-4xl leading-none ml-4"
-                  style={{ color: blackAndWhitePrint ? "#111827" : undefined }}
-                >
-                  {blackAndWhitePrint ? "✎" : "✏️"}
-                </div>
-              </div>
-              <div
-                className="border-t-2 mb-4"
-                style={{ borderTopColor: previewSoftLineColor }}
-              />
+                  className="border-t-2 mb-4"
+                  style={{ borderTopColor: previewSoftLineColor }}
+                />
 
-              {items.map((item, i) => (
-                <div key={i} className="mb-3.5">
-                  {item.label && (
-                    <div
-                      className="text-[10px] font-extrabold uppercase tracking-[0.8px] mb-1"
-                      style={{ color: previewBadgeColor }}
-                    >
-                      ✦ {item.label}
-                    </div>
-                  )}
-                  {mode === "single_letter" ? (
-                    <>
-                      <SingleLetterHero
-                        letter={safeLetter}
-                        image={item.image}
-                        blackAndWhite={blackAndWhitePrint}
-                      />
-                      {Array.from({ length: lines }, (_, j) => (
-                        <TracingRow
-                          key={j}
-                          text={item.text}
-                          fontSize={fontSize}
-                          dim
+                {items.map((item, i) => (
+                  <div key={i} className="mb-3.5">
+                    {item.label && (
+                      <div
+                        className="text-[10px] font-extrabold uppercase tracking-[0.8px] mb-1"
+                        style={{ color: previewBadgeColor }}
+                      >
+                        ✦ {item.label}
+                      </div>
+                    )}
+                    {mode === "single_letter" ? (
+                      <>
+                        <SingleLetterHero
+                          letter={safeLetter}
+                          image={item.image}
                           blackAndWhite={blackAndWhitePrint}
+                          availableWidth={paperContentWidth}
                         />
-                      ))}
-                    </>
-                  ) : (
-                    <>
-                      <TracingRow
-                        text={item.text}
-                        fontSize={fontSize}
-                        redFirstLetter={isPhrase}
-                        blackAndWhite={blackAndWhitePrint}
-                      />
-                      {Array.from({ length: lines - 1 }, (_, j) => (
+                        {Array.from({ length: lines }, (_, j) => (
+                          <TracingRow
+                            key={j}
+                            text={item.text}
+                            fontSize={fontSize}
+                            dim
+                            blackAndWhite={blackAndWhitePrint}
+                            availableWidth={paperContentWidth}
+                          />
+                        ))}
+                      </>
+                    ) : (
+                      <>
                         <TracingRow
-                          key={j}
                           text={item.text}
                           fontSize={fontSize}
-                          dim
                           redFirstLetter={isPhrase}
                           blackAndWhite={blackAndWhitePrint}
+                          availableWidth={paperContentWidth}
                         />
-                      ))}
-                    </>
-                  )}
-                </div>
-              ))}
+                        {Array.from({ length: lines - 1 }, (_, j) => (
+                          <TracingRow
+                            key={j}
+                            text={item.text}
+                            fontSize={fontSize}
+                            dim
+                            redFirstLetter={isPhrase}
+                            blackAndWhite={blackAndWhitePrint}
+                            availableWidth={paperContentWidth}
+                          />
+                        ))}
+                      </>
+                    )}
+                  </div>
+                ))}
 
-              <div
-                className="border-t border-dashed mt-4 pt-2.5 flex justify-between gap-4 flex-wrap text-[11px] text-slate-400"
-                style={{
-                  borderTopColor: blackAndWhitePrint ? "#9ca3af" : "#e2e8f0",
-                  color: blackAndWhitePrint ? "#6b7280" : undefined,
-                }}
-              >
-                <span>Data: ___/___/______</span>
-                <span>Nome: _______________________</span>
+                <div
+                  className="border-t border-dashed mt-4 pt-2.5 flex justify-between gap-4 flex-wrap text-[11px] text-slate-400"
+                  style={{
+                    borderTopColor: "#9ca3af",
+                    color: "#6b7280",
+                  }}
+                >
+                  <span>Data: ___/___/______</span>
+                  <span>Nome: _______________________</span>
+                </div>
               </div>
             </div>
+          </section>
+        </div>
+      </main>
+
+      <footer className="border-t border-slate-200 bg-white/90 px-4 py-5 sm:px-6 md:px-8">
+        <div className="mx-auto flex max-w-[1220px] flex-col gap-3 text-xs font-bold text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <span
+              className="mr-2 text-slate-800"
+              style={{ fontFamily: "'Fredoka One', cursive" }}
+            >
+              Pontiletra
+            </span>
+            <span>Folhas de caligrafia para alfabetização.</span>
+          </div>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-slate-400">
+            <span>A4</span>
+            <span>Colorido ou preto e branco</span>
+            <span>© {new Date().getFullYear()}</span>
           </div>
         </div>
-      </div>
+      </footer>
     </div>
   );
 }

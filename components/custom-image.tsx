@@ -15,9 +15,10 @@ export function Image({
   fallback,
   lazy = true,
   className,
+  onError,
+  onLoad,
   ...props
 }: CustomImageProps) {
-  const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState(false)
 
   return (
@@ -27,8 +28,11 @@ export function Image({
       src={error && fallback ? fallback : src}
       alt={alt}
       loading={lazy ? "lazy" : undefined}
-      onLoad={() => setLoaded(true)}
-      onError={() => setError(true)}
+      onLoad={onLoad}
+      onError={(event) => {
+        setError(true)
+        onError?.(event)
+      }}
       className={className}
       style={{
         transition: "opacity 0.3s ease",
