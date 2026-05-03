@@ -19,9 +19,11 @@ import {
   fitTracingFontSize,
   parseStudents,
   decomposeTilde,
+  isTrailingBlankLine,
+  getTildeTopOffset,
 } from "@/lib/worksheet";
 import { alphabetItems, getAlphabetItem } from "@/lib/alphabet";
-import { printWorksheet } from "@/lib/print";
+import { downloadWorksheet, printWorksheet } from "@/lib/print";
 import { Image } from "@/components/custom-image";
 
 // ---------------------------------------------------------------------------
@@ -48,6 +50,7 @@ function TracingRow({
   redFirstLetter = false,
   blackAndWhite = false,
   availableWidth,
+  blank = false,
 }: {
   text: string;
   fontSize: number;
@@ -55,6 +58,7 @@ function TracingRow({
   redFirstLetter?: boolean;
   blackAndWhite?: boolean;
   availableWidth?: number;
+  blank?: boolean;
 }) {
   const lineColor = LINE_COLOR;
   const cellBorderColor = CELL_BORDER_COLOR;
@@ -80,7 +84,7 @@ function TracingRow({
         return (
           <div
             key={i}
-            className="relative z-[1] flex min-w-0 flex-1 items-end justify-center pb-2"
+            className="relative z-1 flex min-w-0 flex-1 items-end justify-center pb-2"
             style={{
               border: `2px solid ${cellBorderColor}`,
               marginLeft: i === 0 ? 0 : -2,
@@ -96,12 +100,12 @@ function TracingRow({
                 lineHeight: 1,
               }}
             >
-              {base}
-              {hasTilde && (
+              {blank ? "" : base}
+              {!blank && hasTilde && (
                 <span
                   style={{
                     position: "absolute",
-                    top: base !== base.toLowerCase() ? "-0.4em" : "-0.4em",
+                    top: getTildeTopOffset(base),
                     left: "50%",
                     transform: "translateX(-50%)",
                     fontFamily:
@@ -196,7 +200,6 @@ export default function PontiletraPage() {
   const [useCustomLetterImage, setUseCustomLetterImage] = useState(false);
   const [customLetterImage, setCustomLetterImage] = useState("");
   const [customLetterImageName, setCustomLetterImageName] = useState("");
-  const [phrase, setPhrase] = useState("O gato subiu no telhado.");
   const [studentsText, setStudentsText] = useState(
     "Ana\nCarlos\nMariana\nJoão\nSofia",
   );
@@ -207,6 +210,8 @@ export default function PontiletraPage() {
     "Trace as letras pontilhadas para praticar a escrita.",
   );
   const [isPrinting, setIsPrinting] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [isPreparingAlphabet, setIsPreparingAlphabet] = useState(false);
   const [paperContentWidth, setPaperContentWidth] = useState(
     TRACING_FIT_CONTENT_WIDTH,
   );
@@ -236,7 +241,7 @@ export default function PontiletraPage() {
         : undefined;
   const fontSize =
     mode === "single_letter" ? FONT_SIZE_LETTER_MODE : FONT_SIZE_DEFAULT;
-  const isPhrase = mode === "phrase" || mode === "single_name";
+  const redFirstLetter = mode === "single_name";
   const previewAccentColor = "#111827";
   const previewSoftLineColor = "#6b7280";
   const previewBadgeColor = "#374151";
@@ -249,11 +254,10 @@ export default function PontiletraPage() {
         return [
           {
             text: repeatedLetterLine(safeLetter, letterRepeat),
+            letter: safeLetter,
             image: letterImage,
           },
         ];
-      case "phrase":
-        return [{ text: normalizeText(phrase, "Frase") }];
       case "student_list":
         return students.length
           ? students.map((s) => ({ text: s, label: s }))
@@ -309,21 +313,72 @@ export default function PontiletraPage() {
     }
   }
 
+  function getWorksheetOptions() {
+    return {
+      items,
+      title,
+      subtitle,
+      mode,
+      safeLetter,
+      lines,
+      blackAndWhite: blackAndWhitePrint,
+    };
+  }
+
+  function getAlphabetItems(): WorksheetItem[] {
+    return alphabetItems.map((item) => ({
+      text: repeatedLetterLine(item.letter, letterRepeat),
+      letter: item.letter,
+      image: showLetterImage
+        ? {
+            src: item.image,
+            alt: `${item.letter} de ${item.label}`,
+            letter: item.letter,
+            label: item.label,
+          }
+        : undefined,
+    }));
+  }
+
+  function getAlphabetWorksheetOptions() {
+    return {
+      items: getAlphabetItems(),
+      title: "Alfabeto",
+      subtitle,
+      mode: "single_letter" as const,
+      safeLetter: "A",
+      lines,
+      blackAndWhite: blackAndWhitePrint,
+    };
+  }
+
   async function handlePrint() {
-    if (isPrinting) return;
+    if (isPrinting || isDownloading || isPreparingAlphabet) return;
     setIsPrinting(true);
     try {
-      await printWorksheet({
-        items,
-        title,
-        subtitle,
-        mode,
-        safeLetter,
-        lines,
-        blackAndWhite: blackAndWhitePrint,
-      });
+      await printWorksheet(getWorksheetOptions());
     } finally {
       setIsPrinting(false);
+    }
+  }
+
+  async function handleDownload() {
+    if (isPrinting || isDownloading || isPreparingAlphabet) return;
+    setIsDownloading(true);
+    try {
+      await downloadWorksheet(getWorksheetOptions());
+    } finally {
+      setIsDownloading(false);
+    }
+  }
+
+  async function handlePrintAlphabet() {
+    if (isPrinting || isDownloading || isPreparingAlphabet) return;
+    setIsPreparingAlphabet(true);
+    try {
+      await printWorksheet(getAlphabetWorksheetOptions());
+    } finally {
+      setIsPreparingAlphabet(false);
     }
   }
 
@@ -374,7 +429,7 @@ export default function PontiletraPage() {
               Prévia ao vivo
             </span>
             <span className="rounded-full border border-white/20 bg-amber-300 px-3 py-1.5 text-slate-900">
-              PDF
+              Download
             </span>
           </div>
         </div>
@@ -607,23 +662,6 @@ export default function PontiletraPage() {
               </div>
             )}
 
-            {mode === "phrase" && (
-              <div className="mb-4">
-                <label htmlFor="phrase-input" className={labelCls}>
-                  Frase
-                </label>
-                <textarea
-                  id="phrase-input"
-                  value={phrase}
-                  onChange={(e) => setPhrase(e.target.value)}
-                  rows={3}
-                  placeholder="Ex: O gato subiu no telhado."
-                  className={`${inputCls} resize-y text-sm`}
-                  style={{ fontFamily: "'Patrick Hand', cursive" }}
-                />
-              </div>
-            )}
-
             {mode === "student_list" && (
               <div className="mb-4">
                 <label htmlFor="students-input" className={labelCls}>
@@ -709,7 +747,7 @@ export default function PontiletraPage() {
               <button
                 type="button"
                 onClick={handlePrint}
-                disabled={isPrinting}
+                disabled={isPrinting || isDownloading || isPreparingAlphabet}
                 className={`${toolButtonCls} h-11 border-[#0f766e] bg-[#0f766e] text-sm text-white shadow-[0_6px_16px_rgba(15,118,110,0.24)] hover:bg-[#115e59]`}
                 style={{ fontFamily: "'Fredoka One', cursive" }}
               >
@@ -720,16 +758,38 @@ export default function PontiletraPage() {
               </button>
               <button
                 type="button"
-                onClick={handlePrint}
-                disabled={isPrinting}
+                onClick={handleDownload}
+                disabled={isPrinting || isDownloading || isPreparingAlphabet}
                 className={`${toolButtonCls} h-11 border-sky-200 bg-sky-50 text-sm text-[#0369a1] hover:border-sky-300 hover:bg-white`}
                 style={{ fontFamily: "'Fredoka One', cursive" }}
               >
-                <span aria-hidden="true" className="mr-2 rounded bg-white px-1 py-0.5 text-[10px] text-[#0f766e]">
-                  PDF
+                <span
+                  aria-hidden="true"
+                  className="mr-2 text-base leading-none text-[#0f766e]"
+                >
+                  ↓
                 </span>
-                {isPrinting ? "Preparando..." : "Salvar PDF"}
+                {isDownloading ? "Baixando..." : "Baixar"}
               </button>
+              {mode === "single_letter" && (
+                <button
+                  type="button"
+                  onClick={handlePrintAlphabet}
+                  disabled={isPrinting || isDownloading || isPreparingAlphabet}
+                  className={`${toolButtonCls} h-11 border-amber-200 bg-amber-50 text-sm text-slate-800 hover:border-amber-300 hover:bg-white sm:col-span-2 lg:col-span-1`}
+                  style={{ fontFamily: "'Fredoka One', cursive" }}
+                >
+                  <span
+                    aria-hidden="true"
+                    className="mr-2 text-[13px] leading-none text-[#0f766e]"
+                  >
+                    A-Z
+                  </span>
+                  {isPreparingAlphabet
+                    ? "Preparando..."
+                    : "Salvar alfabeto em PDF"}
+                </button>
+              )}
             </div>
           </aside>
 
@@ -809,6 +869,7 @@ export default function PontiletraPage() {
                             dim
                             blackAndWhite={blackAndWhitePrint}
                             availableWidth={paperContentWidth}
+                            blank={isTrailingBlankLine(j, lines)}
                           />
                         ))}
                       </>
@@ -817,7 +878,7 @@ export default function PontiletraPage() {
                         <TracingRow
                           text={item.text}
                           fontSize={fontSize}
-                          redFirstLetter={isPhrase}
+                          redFirstLetter={redFirstLetter}
                           blackAndWhite={blackAndWhitePrint}
                           availableWidth={paperContentWidth}
                         />
@@ -827,9 +888,10 @@ export default function PontiletraPage() {
                             text={item.text}
                             fontSize={fontSize}
                             dim
-                            redFirstLetter={isPhrase}
+                            redFirstLetter={redFirstLetter}
                             blackAndWhite={blackAndWhitePrint}
                             availableWidth={paperContentWidth}
+                            blank={isTrailingBlankLine(j, lines - 1)}
                           />
                         ))}
                       </>

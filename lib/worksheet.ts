@@ -1,9 +1,8 @@
-export type Mode = "single_name" | "single_letter" | "phrase" | "student_list";
+export type Mode = "single_name" | "single_letter" | "student_list";
 
 export const MODE_LABELS: Record<Mode, string> = {
   single_name: "Nome Individual",
   single_letter: "Letra Individual",
-  phrase: "Frase",
   student_list: "Lista de Alunos",
 };
 
@@ -16,6 +15,7 @@ export type WorksheetImage = {
 
 export type WorksheetItem = {
   text: string;
+  letter?: string;
   label?: string;
   image?: WorksheetImage;
 };
@@ -25,7 +25,8 @@ export const FONT_SIZE_LETTER_EXAMPLE = 130; // oversized single-letter example 
 export const FONT_SIZE_LETTER_MODE = 56; // tracing rows in single_letter mode
 export const FONT_SIZE_DEFAULT = 68; // all other modes
 export const ROW_EXTRA_HEIGHT = 38; // added to fontSize to derive row height
-export const TILDE_FONT_SCALE = 0.8; // tilde accent rendered at 60% of base font size
+export const TILDE_FONT_SCALE = 0.8; // tilde accent rendered at 80% of base font size
+export const TRAILING_BLANK_LINES = 3;
 export const LINE_COLOR = "#9ca3af";
 export const CELL_BORDER_COLOR = "#4b5563";
 export const TRACING_FIT_CONTENT_WIDTH = 640;
@@ -58,6 +59,14 @@ export function fitTracingFontSize(
     requestedFontSize,
     Math.max(TRACING_MIN_FONT_SIZE, fittedSize),
   );
+}
+
+export function isTrailingBlankLine(index: number, totalLines: number): boolean {
+  return index >= Math.max(0, totalLines - TRAILING_BLANK_LINES);
+}
+
+export function getTildeTopOffset(base: string): "-0.1em" | "-0.4em" {
+  return base === base.toLocaleLowerCase("pt-BR") ? "-0.1em" : "-0.4em";
 }
 
 export function parseStudents(value: string): string[] {

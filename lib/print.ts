@@ -9,6 +9,8 @@ import {
   LINE_COLOR,
   CELL_BORDER_COLOR,
   fitTracingFontSize,
+  isTrailingBlankLine,
+  getTildeTopOffset,
 } from "./worksheet";
 import type { Mode, WorksheetImage, WorksheetItem } from "./worksheet";
 
@@ -21,9 +23,9 @@ function buildTildeSpanStr(
   fontSize: number,
   color: string,
 ): string {
-  const top = base !== base.toLowerCase() ? "-0.4em" : "-0.1em";
+  const top = getTildeTopOffset(base);
   const tildeFontSize = Math.round(fontSize * TILDE_FONT_SCALE);
-  return `<span style="position:absolute;top:${top};left:50%;transform:translateX(-50%);font-family:'Pontiletra','Patrick Hand',cursive;font-size:${tildeFontSize}px;line-height:1;color:${color}">˜</span>`;
+  return `<span style="position:absolute;top:${top};left:50%;transform:translateX(-50%);font-family:'Pontiletra','Patrick Hand',cursive;font-size:${tildeFontSize}px;line-height:1;color:${color}">~</span>`;
 }
 
 export function buildTracingRowStr(
@@ -32,6 +34,7 @@ export function buildTracingRowStr(
   dim: boolean,
   redFirstLetter = false,
   blackAndWhite = false,
+  blank = false,
 ): string {
   const tc = dim ? "#4b5563" : "#111827";
   const fittedFontSize = fitTracingFontSize(text, fontSize);
@@ -40,8 +43,10 @@ export function buildTracingRowStr(
     .map((char, i) => {
       const color = redFirstLetter && i === 0 && !blackAndWhite ? "#dc2626" : tc;
       const { base, hasTilde } = decomposeTilde(char);
-      const tilde = hasTilde ? buildTildeSpanStr(base, fittedFontSize, color) : "";
-      return `<div class="letter-cell"><span class="letter-char" style="position:relative;display:inline-block;font-size:${fittedFontSize}px;color:${color}">${escXML(base)}${tilde}</span></div>`;
+      const tilde =
+        !blank && hasTilde ? buildTildeSpanStr(base, fittedFontSize, color) : "";
+      const printedBase = blank ? "" : escXML(base);
+      return `<div class="letter-cell"><span class="letter-char" style="position:relative;display:inline-block;font-size:${fittedFontSize}px;color:${color}">${printedBase}${tilde}</span></div>`;
     })
     .join("");
   return `<div class="tracing-row" style="height:${rowH}px">${cells}</div>`;
@@ -60,11 +65,12 @@ export function buildRowsStr(
 ): string {
   const fontSize =
     mode === "single_letter" ? FONT_SIZE_LETTER_MODE : FONT_SIZE_DEFAULT;
-  const redFirstLetter = mode === "phrase" || mode === "single_name";
+  const redFirstLetter = mode === "single_name";
 
   if (mode === "single_letter") {
+    const letter = item.letter ?? item.image?.letter ?? safeLetter;
     const exampleRow = buildTracingRowStr(
-      safeLetter,
+      letter,
       FONT_SIZE_LETTER_EXAMPLE,
       false,
       false,
@@ -73,8 +79,15 @@ export function buildRowsStr(
     const heroRow = item.image
       ? `<div class="single-letter-hero">${exampleRow}${buildLetterImageStr(item.image)}</div>`
       : exampleRow;
-    const tracingRows = Array.from({ length: lines }, () =>
-      buildTracingRowStr(item.text, fontSize, true, false, blackAndWhite),
+    const tracingRows = Array.from({ length: lines }, (_, i) =>
+      buildTracingRowStr(
+        item.text,
+        fontSize,
+        true,
+        false,
+        blackAndWhite,
+        isTrailingBlankLine(i, lines),
+      ),
     ).join("");
     return heroRow + tracingRows;
   }
@@ -86,8 +99,16 @@ export function buildRowsStr(
     redFirstLetter,
     blackAndWhite,
   );
-  const tracingRows = Array.from({ length: lines - 1 }, () =>
-    buildTracingRowStr(item.text, fontSize, true, redFirstLetter, blackAndWhite),
+  const practiceLineCount = Math.max(0, lines - 1);
+  const tracingRows = Array.from({ length: practiceLineCount }, (_, i) =>
+    buildTracingRowStr(
+      item.text,
+      fontSize,
+      true,
+      redFirstLetter,
+      blackAndWhite,
+      isTrailingBlankLine(i, practiceLineCount),
+    ),
   ).join("");
   return exampleRow + tracingRows;
 }
@@ -183,6 +204,7 @@ export function buildPrintHTML({
     .join("");
 
   return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Atividade de Caligrafia</title>
 <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Patrick+Hand&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
 <style>${printCSS}</style></head>
@@ -275,9 +297,14 @@ async function waitForImages(doc: Document): Promise<void> {
 }
 
 async function waitForPrintAssets(win: Window): Promise<void> {
-  await Promise.all([
+  const assetsReady = Promise.all([
     win.document.fonts ? win.document.fonts.ready : Promise.resolve(),
     waitForImages(win.document),
+  ]);
+
+  await Promise.race([
+    assetsReady,
+    new Promise<void>((resolve) => setTimeout(resolve, 1800)),
   ]);
 }
 
@@ -288,9 +315,9 @@ export type PrintWorksheetOptions = Omit<
   blackAndWhite?: boolean;
 };
 
-export async function printWorksheet(
+async function buildWorksheetDocumentHTML(
   options: PrintWorksheetOptions,
-): Promise<void> {
+): Promise<string> {
   let fontBase64 = "";
   try {
     fontBase64 = await fetchFontAsBase64();
@@ -306,6 +333,106 @@ export async function printWorksheet(
     blackAndWhite,
     printCSS: buildPrintCSS(fontBase64),
   });
+
+  return html;
+}
+
+function shouldUsePrintableTab(): boolean {
+  if (typeof window === "undefined") return false;
+
+  return (
+    window.matchMedia("(pointer: coarse)").matches ||
+    window.matchMedia("(max-width: 767px)").matches ||
+    /Android|iPhone|iPad|iPod|Mobile/i.test(window.navigator.userAgent)
+  );
+}
+
+function writePreparingDocument(win: Window) {
+  win.document.open();
+  win.document.write(`<!DOCTYPE html><html lang="pt-BR"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Preparando atividade</title>
+<style>
+html,body{height:100%;margin:0;background:#fff;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#111827;}
+body{display:grid;place-items:center;padding:24px;text-align:center;}
+p{margin:0;font-size:16px;font-weight:700;}
+</style>
+</head><body><p>Preparando atividade...</p></body></html>`);
+  win.document.close();
+}
+
+function writeDocument(win: Window, html: string) {
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+}
+
+async function printOpenWindow(win: Window): Promise<void> {
+  await waitForPrintAssets(win);
+
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      win.focus();
+      win.print();
+      setTimeout(resolve, 1000);
+    }, 150);
+  });
+}
+
+function downloadHTML(html: string, filename: string) {
+  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.rel = "noopener";
+  link.target = "_blank";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+}
+
+function getWorksheetFilename(title: string): string {
+  const slug =
+    title
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 48) || "pontiletra";
+
+  return `${slug}.html`;
+}
+
+export async function downloadWorksheet(
+  options: PrintWorksheetOptions,
+): Promise<void> {
+  const html = await buildWorksheetDocumentHTML(options);
+  downloadHTML(html, getWorksheetFilename(options.title));
+}
+
+export async function printWorksheet(
+  options: PrintWorksheetOptions,
+): Promise<void> {
+  const printableWindow = shouldUsePrintableTab()
+    ? window.open("", "_blank")
+    : null;
+
+  if (printableWindow) {
+    writePreparingDocument(printableWindow);
+  }
+
+  const html = await buildWorksheetDocumentHTML(options);
+
+  if (printableWindow) {
+    writeDocument(printableWindow, html);
+    await printOpenWindow(printableWindow);
+    return;
+  }
+
   const blob = new Blob([html], { type: "text/html;charset=utf-8" });
   const url = URL.createObjectURL(blob);
 
