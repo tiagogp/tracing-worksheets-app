@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { useState } from "react";
 import {
   type Mode,
@@ -21,6 +20,7 @@ import {
 } from "@/lib/worksheet";
 import { alphabetItems, getAlphabetItem } from "@/lib/alphabet";
 import { printWorksheet } from "@/lib/print";
+import { Image } from "@/components/custom-image";
 
 // ---------------------------------------------------------------------------
 // Shared style primitives
@@ -41,35 +41,46 @@ function TracingRow({
   fontSize,
   dim = false,
   redFirstLetter = false,
+  blackAndWhite = false,
 }: {
   text: string;
   fontSize: number;
   dim?: boolean;
   redFirstLetter?: boolean;
+  blackAndWhite?: boolean;
 }) {
-  const tc = dim ? "#c0cfe8" : "#1e293b";
+  const lineColor = blackAndWhite ? "#9ca3af" : LINE_COLOR;
+  const cellBorderColor = blackAndWhite ? "#4b5563" : CELL_BORDER_COLOR;
+  const tc = blackAndWhite
+    ? dim
+      ? "#9ca3af"
+      : "#111827"
+    : dim
+      ? "#c0cfe8"
+      : "#1e293b";
   return (
     <div
       className="relative flex mb-0.5"
       style={{
         height: fontSize + ROW_EXTRA_HEIGHT,
-        borderTop: `1px solid ${LINE_COLOR}`,
-        borderBottom: `1.5px solid ${LINE_COLOR}`,
+        borderTop: `1px solid ${lineColor}`,
+        borderBottom: `1.5px solid ${lineColor}`,
       }}
     >
       <div
         className="absolute top-1/2 left-0 right-0 h-0 pointer-events-none"
-        style={{ borderTop: `0.7px dashed ${LINE_COLOR}` }}
+        style={{ borderTop: `0.7px dashed ${lineColor}` }}
       />
       {Array.from(text).map((char, i) => {
         const { base, hasTilde } = decomposeTilde(char);
-        const color = redFirstLetter && i === 0 ? "#dc2626" : tc;
+        const color =
+          redFirstLetter && i === 0 && !blackAndWhite ? "#dc2626" : tc;
         return (
           <div
             key={i}
             className="flex-1 flex items-end justify-center pb-2 relative z-[1]"
             style={{
-              border: `2px solid ${CELL_BORDER_COLOR}`,
+              border: `2px solid ${cellBorderColor}`,
               marginLeft: i === 0 ? 0 : -2,
             }}
           >
@@ -112,18 +123,33 @@ function TracingRow({
 function SingleLetterHero({
   letter,
   image,
+  blackAndWhite = false,
 }: {
   letter: string;
   image?: WorksheetItem["image"];
+  blackAndWhite?: boolean;
 }) {
   if (!image) {
-    return <TracingRow text={letter} fontSize={FONT_SIZE_LETTER_EXAMPLE} />;
+    return (
+      <TracingRow
+        text={letter}
+        fontSize={FONT_SIZE_LETTER_EXAMPLE}
+        blackAndWhite={blackAndWhite}
+      />
+    );
   }
 
   return (
     <div className="grid grid-cols-1 gap-1 sm:grid-cols-[minmax(0,1fr)_160px]">
-      <TracingRow text={letter} fontSize={FONT_SIZE_LETTER_EXAMPLE} />
-      <div className="flex h-42 flex-col overflow-hidden border-2 border-[#60a5fa] bg-white">
+      <TracingRow
+        text={letter}
+        fontSize={FONT_SIZE_LETTER_EXAMPLE}
+        blackAndWhite={blackAndWhite}
+      />
+      <div
+        className="flex h-42 flex-col overflow-hidden border-2 bg-white"
+        style={{ borderColor: blackAndWhite ? "#4b5563" : CELL_BORDER_COLOR }}
+      >
         <div className="min-h-0 flex-1 p-1">
           <Image
             src={image.src}
@@ -131,9 +157,18 @@ function SingleLetterHero({
             width={160}
             height={136}
             className="h-full w-full object-contain"
+            style={{
+              filter: blackAndWhite ? "grayscale(1) contrast(1.05)" : undefined,
+            }}
           />
         </div>
-        <div className="border-t border-[#bae6fd] px-1.5 py-1.5 text-center text-sm font-extrabold leading-tight text-[#0369a1] [overflow-wrap:anywhere]">
+        <div
+          className="border-t px-1.5 py-1.5 text-center text-sm font-extrabold leading-tight [overflow-wrap:anywhere]"
+          style={{
+            borderTopColor: blackAndWhite ? "#9ca3af" : "#bae6fd",
+            color: blackAndWhite ? "#111827" : "#0369a1",
+          }}
+        >
           {image.label}
         </div>
       </div>
@@ -151,12 +186,16 @@ export default function PontiletraPage() {
   const [letter, setLetter] = useState("A");
   const [letterRepeat, setLetterRepeat] = useState(8);
   const [showLetterImage, setShowLetterImage] = useState(true);
+  const [useCustomLetterImage, setUseCustomLetterImage] = useState(false);
+  const [customLetterImage, setCustomLetterImage] = useState("");
+  const [customLetterImageName, setCustomLetterImageName] = useState("");
   const [phrase, setPhrase] = useState("O gato subiu no telhado.");
   const [studentsText, setStudentsText] = useState(
     "Ana\nCarlos\nMariana\nJoão\nSofia",
   );
   const [lines, setLines] = useState(7);
-  const [title, setTitle] = useState("Meu Nome");
+  const [blackAndWhitePrint, setBlackAndWhitePrint] = useState(false);
+  const [title, setTitle] = useState("Nome: ");
   const [subtitle, setSubtitle] = useState(
     "Trace as letras pontilhadas para praticar a escrita.",
   );
@@ -165,18 +204,32 @@ export default function PontiletraPage() {
   const students = parseStudents(studentsText);
   const safeLetter = normalizeLetter(letter);
   const alphabetItem = getAlphabetItem(safeLetter);
+  const customImageLabel = normalizeText(
+    customLetterImageName,
+    "Imagem personalizada",
+  );
   const letterImage =
-    showLetterImage && alphabetItem
+    showLetterImage && useCustomLetterImage && customLetterImage
       ? {
-          src: alphabetItem.image,
-          alt: `${alphabetItem.letter} de ${alphabetItem.label}`,
-          letter: alphabetItem.letter,
-          label: alphabetItem.label,
+          src: customLetterImage,
+          alt: `${safeLetter} de ${customImageLabel}`,
+          letter: safeLetter,
+          label: customImageLabel,
         }
-      : undefined;
+      : showLetterImage && !useCustomLetterImage && alphabetItem
+        ? {
+            src: alphabetItem.image,
+            alt: `${alphabetItem.letter} de ${alphabetItem.label}`,
+            letter: alphabetItem.letter,
+            label: alphabetItem.label,
+          }
+        : undefined;
   const fontSize =
     mode === "single_letter" ? FONT_SIZE_LETTER_MODE : FONT_SIZE_DEFAULT;
   const isPhrase = mode === "phrase" || mode === "single_name";
+  const previewAccentColor = blackAndWhitePrint ? "#111827" : "#0369a1";
+  const previewSoftLineColor = blackAndWhitePrint ? "#6b7280" : "#bae6fd";
+  const previewBadgeColor = blackAndWhitePrint ? "#374151" : "#0ea5e9";
 
   function getItems(): WorksheetItem[] {
     switch (mode) {
@@ -206,11 +259,35 @@ export default function PontiletraPage() {
     setLetter(chars[chars.length - 1] ?? safeLetter);
   }
 
+  function handleCustomImageChange(file: File | undefined) {
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.addEventListener("load", () => {
+      setCustomLetterImage(String(reader.result));
+    });
+    reader.readAsDataURL(file);
+
+    if (!customLetterImageName.trim()) {
+      setCustomLetterImageName(
+        file.name.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " "),
+      );
+    }
+  }
+
   async function handlePrint() {
     if (isPrinting) return;
     setIsPrinting(true);
     try {
-      await printWorksheet({ items, title, subtitle, mode, safeLetter, lines });
+      await printWorksheet({
+        items,
+        title,
+        subtitle,
+        mode,
+        safeLetter,
+        lines,
+        blackAndWhite: blackAndWhitePrint,
+      });
     } finally {
       setIsPrinting(false);
     }
@@ -368,7 +445,100 @@ export default function PontiletraPage() {
                     />
                     Imagem da letra
                   </label>
-                  {!alphabetItem && (
+                  {showLetterImage && (
+                    <>
+                      <div className="mt-3 grid grid-cols-2 gap-1.5 rounded-lg bg-white p-1">
+                        <button
+                          type="button"
+                          aria-pressed={!useCustomLetterImage}
+                          onClick={() => setUseCustomLetterImage(false)}
+                          className={`rounded-md px-2 py-2 text-xs font-extrabold transition-colors ${
+                            !useCustomLetterImage
+                              ? "bg-[#0284c7] text-white"
+                              : "text-[#0369a1] hover:bg-[#f0f9ff]"
+                          }`}
+                        >
+                          Alfabeto
+                        </button>
+                        <button
+                          type="button"
+                          aria-pressed={useCustomLetterImage}
+                          onClick={() => setUseCustomLetterImage(true)}
+                          className={`rounded-md px-2 py-2 text-xs font-extrabold transition-colors ${
+                            useCustomLetterImage
+                              ? "bg-[#0284c7] text-white"
+                              : "text-[#0369a1] hover:bg-[#f0f9ff]"
+                          }`}
+                        >
+                          Personalizada
+                        </button>
+                      </div>
+
+                      {useCustomLetterImage && (
+                        <div className="mt-3 space-y-3">
+                          <div>
+                            <label
+                              htmlFor="custom-letter-name"
+                              className={labelCls}
+                            >
+                              Nome da Imagem
+                            </label>
+                            <input
+                              id="custom-letter-name"
+                              type="text"
+                              value={customLetterImageName}
+                              onChange={(e) =>
+                                setCustomLetterImageName(e.target.value)
+                              }
+                              placeholder="Ex: Avião"
+                              className={`${inputCls} text-sm`}
+                            />
+                          </div>
+                          <div>
+                            <label
+                              htmlFor="custom-letter-image"
+                              className={labelCls}
+                            >
+                              Arquivo da Imagem
+                            </label>
+                            <input
+                              id="custom-letter-image"
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) =>
+                                handleCustomImageChange(e.target.files?.[0])
+                              }
+                              className="block w-full cursor-pointer rounded-lg border-[1.5px] border-[#e2e8f0] bg-white text-xs font-bold text-slate-600 file:mr-3 file:border-0 file:bg-[#e0f2fe] file:px-3 file:py-2.5 file:text-xs file:font-extrabold file:text-[#0369a1]"
+                            />
+                          </div>
+                          {customLetterImage && (
+                            <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-2">
+                              <Image
+                                src={customLetterImage}
+                                alt={customImageLabel}
+                                width={52}
+                                height={52}
+                                className="h-13 w-13 object-contain"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setCustomLetterImage("")}
+                                className="rounded-md border border-slate-200 px-2.5 py-1.5 text-xs font-extrabold text-slate-500 hover:bg-slate-50"
+                              >
+                                Remover
+                              </button>
+                            </div>
+                          )}
+                          {!customLetterImage && (
+                            <div className="text-xs font-bold text-slate-400">
+                              Escolha uma imagem para aparecer na folha.
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  )}
+                  {!useCustomLetterImage && !alphabetItem && (
                     <div className="mt-3 text-xs font-bold text-slate-400">
                       Sem imagem para esta letra.
                     </div>
@@ -460,6 +630,22 @@ export default function PontiletraPage() {
               />
             </div>
 
+            <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <label
+                htmlFor="black-and-white-print"
+                className="flex items-center gap-2 text-sm font-extrabold text-slate-700"
+              >
+                <input
+                  id="black-and-white-print"
+                  type="checkbox"
+                  checked={blackAndWhitePrint}
+                  onChange={(e) => setBlackAndWhitePrint(e.target.checked)}
+                  className="h-4 w-4 accent-[#0284c7]"
+                />
+                Preto e branco
+              </label>
+            </div>
+
             <button
               type="button"
               onClick={handlePrint}
@@ -495,8 +681,11 @@ export default function PontiletraPage() {
               <div className="flex items-start justify-between mb-3">
                 <div>
                   <div
-                    className="text-[22px] text-[#0369a1] uppercase tracking-[1px] leading-tight [overflow-wrap:anywhere]"
-                    style={{ fontFamily: "'Fredoka One', cursive" }}
+                    className="text-[22px] uppercase tracking-[1px] leading-tight [overflow-wrap:anywhere]"
+                    style={{
+                      color: previewAccentColor,
+                      fontFamily: "'Fredoka One', cursive",
+                    }}
                   >
                     {title}
                   </div>
@@ -504,16 +693,26 @@ export default function PontiletraPage() {
                     {subtitle}
                   </div>
                 </div>
-                <div aria-hidden="true" className="text-4xl leading-none ml-4">
-                  ✏️
+                <div
+                  aria-hidden="true"
+                  className="text-4xl leading-none ml-4"
+                  style={{ color: blackAndWhitePrint ? "#111827" : undefined }}
+                >
+                  {blackAndWhitePrint ? "✎" : "✏️"}
                 </div>
               </div>
-              <div className="border-t-2 border-[#bae6fd] mb-4" />
+              <div
+                className="border-t-2 mb-4"
+                style={{ borderTopColor: previewSoftLineColor }}
+              />
 
               {items.map((item, i) => (
                 <div key={i} className="mb-3.5">
                   {item.label && (
-                    <div className="text-[10px] font-extrabold text-[#0ea5e9] uppercase tracking-[0.8px] mb-1">
+                    <div
+                      className="text-[10px] font-extrabold uppercase tracking-[0.8px] mb-1"
+                      style={{ color: previewBadgeColor }}
+                    >
                       ✦ {item.label}
                     </div>
                   )}
@@ -522,6 +721,7 @@ export default function PontiletraPage() {
                       <SingleLetterHero
                         letter={safeLetter}
                         image={item.image}
+                        blackAndWhite={blackAndWhitePrint}
                       />
                       {Array.from({ length: lines }, (_, j) => (
                         <TracingRow
@@ -529,6 +729,7 @@ export default function PontiletraPage() {
                           text={item.text}
                           fontSize={fontSize}
                           dim
+                          blackAndWhite={blackAndWhitePrint}
                         />
                       ))}
                     </>
@@ -538,6 +739,7 @@ export default function PontiletraPage() {
                         text={item.text}
                         fontSize={fontSize}
                         redFirstLetter={isPhrase}
+                        blackAndWhite={blackAndWhitePrint}
                       />
                       {Array.from({ length: lines - 1 }, (_, j) => (
                         <TracingRow
@@ -546,6 +748,7 @@ export default function PontiletraPage() {
                           fontSize={fontSize}
                           dim
                           redFirstLetter={isPhrase}
+                          blackAndWhite={blackAndWhitePrint}
                         />
                       ))}
                     </>
@@ -553,7 +756,13 @@ export default function PontiletraPage() {
                 </div>
               ))}
 
-              <div className="border-t border-dashed border-[#e2e8f0] mt-4 pt-2.5 flex justify-between gap-4 flex-wrap text-[11px] text-slate-400">
+              <div
+                className="border-t border-dashed mt-4 pt-2.5 flex justify-between gap-4 flex-wrap text-[11px] text-slate-400"
+                style={{
+                  borderTopColor: blackAndWhitePrint ? "#9ca3af" : "#e2e8f0",
+                  color: blackAndWhitePrint ? "#6b7280" : undefined,
+                }}
+              >
                 <span>Data: ___/___/______</span>
                 <span>Nome: _______________________</span>
               </div>

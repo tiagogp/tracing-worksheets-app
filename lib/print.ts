@@ -28,12 +28,13 @@ export function buildTracingRowStr(
   fontSize: number,
   dim: boolean,
   redFirstLetter = false,
+  blackAndWhite = false,
 ): string {
-  const tc = dim ? "#c0cfe8" : "#1e293b";
+  const tc = blackAndWhite ? (dim ? "#9ca3af" : "#111827") : dim ? "#c0cfe8" : "#1e293b";
   const rowH = fontSize + ROW_EXTRA_HEIGHT;
   const cells = Array.from(text)
     .map((char, i) => {
-      const color = redFirstLetter && i === 0 ? "#dc2626" : tc;
+      const color = redFirstLetter && i === 0 && !blackAndWhite ? "#dc2626" : tc;
       const { base, hasTilde } = decomposeTilde(char);
       const tilde = hasTilde ? buildTildeSpanStr(base, fontSize, color) : "";
       return `<div class="letter-cell"><span class="letter-char" style="position:relative;display:inline-block;font-size:${fontSize}px;color:${color}">${escXML(base)}${tilde}</span></div>`;
@@ -51,6 +52,7 @@ export function buildRowsStr(
   mode: Mode,
   safeLetter: string,
   lines: number,
+  blackAndWhite: boolean,
 ): string {
   const fontSize =
     mode === "single_letter" ? FONT_SIZE_LETTER_MODE : FONT_SIZE_DEFAULT;
@@ -61,12 +63,14 @@ export function buildRowsStr(
       safeLetter,
       FONT_SIZE_LETTER_EXAMPLE,
       false,
+      false,
+      blackAndWhite,
     );
     const heroRow = item.image
       ? `<div class="single-letter-hero">${exampleRow}${buildLetterImageStr(item.image)}</div>`
       : exampleRow;
     const tracingRows = Array.from({ length: lines }, () =>
-      buildTracingRowStr(item.text, fontSize, true),
+      buildTracingRowStr(item.text, fontSize, true, false, blackAndWhite),
     ).join("");
     return heroRow + tracingRows;
   }
@@ -76,9 +80,10 @@ export function buildRowsStr(
     fontSize,
     false,
     redFirstLetter,
+    blackAndWhite,
   );
   const tracingRows = Array.from({ length: lines - 1 }, () =>
-    buildTracingRowStr(item.text, fontSize, true, redFirstLetter),
+    buildTracingRowStr(item.text, fontSize, true, redFirstLetter, blackAndWhite),
   ).join("");
   return exampleRow + tracingRows;
 }
@@ -87,33 +92,45 @@ export function buildRowsStr(
 // Full document builder
 // ---------------------------------------------------------------------------
 
-export function buildPrintCSS(fontBase64: string): string {
+export function buildPrintCSS(
+  fontBase64: string,
+  blackAndWhite: boolean,
+): string {
   const src = fontBase64
     ? `url('data:font/truetype;base64,${fontBase64}') format('truetype')`
     : `url('/pontiletra.ttf') format('truetype')`;
+  const titleColor = blackAndWhite ? "#111827" : "#0369a1";
+  const subtitleColor = blackAndWhite ? "#4b5563" : "#64748b";
+  const headerBorderColor = blackAndWhite ? "#6b7280" : "#bae6fd";
+  const studentBadgeColor = blackAndWhite ? "#374151" : "#0ea5e9";
+  const lineColor = blackAndWhite ? "#9ca3af" : "#93c5fd";
+  const cellBorderColor = blackAndWhite ? "#4b5563" : "#60a5fa";
+  const pictureNameColor = blackAndWhite ? "#111827" : "#0369a1";
+  const footerColor = blackAndWhite ? "#6b7280" : "#94a3b8";
+  const imageFilter = blackAndWhite ? "filter:grayscale(1) contrast(1.05);" : "";
   return `@font-face{font-family:'Pontiletra';src:${src};font-display:block;}
 @page{size:A4 portrait;margin:1.5cm;}
 *{box-sizing:border-box;margin:0;padding:0;}
 html,body{width:100%;background:#fff;}
 body{font-family:'Nunito',sans-serif;}
 .ws-page{width:100%;min-height:calc(29.7cm - 3cm);display:flex;flex-direction:column;}
-.ws-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;padding-bottom:12px;border-bottom:2px solid #bae6fd;}
-.ws-title{font-family:'Fredoka One',cursive;font-size:20px;color:#0369a1;text-transform:uppercase;letter-spacing:1px;overflow-wrap:anywhere;}
-.ws-subtitle{font-size:11px;color:#64748b;font-style:italic;margin-top:3px;overflow-wrap:anywhere;}
+.ws-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;padding-bottom:12px;border-bottom:2px solid ${headerBorderColor};}
+.ws-title{font-family:'Fredoka One',cursive;font-size:20px;color:${titleColor};text-transform:uppercase;letter-spacing:1px;overflow-wrap:anywhere;}
+.ws-subtitle{font-size:11px;color:${subtitleColor};font-style:italic;margin-top:3px;overflow-wrap:anywhere;}
 .ws-content{flex:1;}
 .tracing-block{margin-bottom:10px;}
-.student-badge{font-size:10px;font-weight:700;color:#0ea5e9;text-transform:uppercase;letter-spacing:.6px;margin-bottom:3px;}
-.tracing-row{position:relative;display:flex;border-top:1px solid #93c5fd;border-bottom:1.5px solid #93c5fd;margin-bottom:2px;}
-.tracing-row::after{content:'';position:absolute;top:50%;left:0;right:0;border-top:0.7px dashed #93c5fd;pointer-events:none;}
-.letter-cell{flex:1;border:2px solid #60a5fa;margin-left:-2px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:8px;position:relative;z-index:1;}
+.student-badge{font-size:10px;font-weight:700;color:${studentBadgeColor};text-transform:uppercase;letter-spacing:.6px;margin-bottom:3px;}
+.tracing-row{position:relative;display:flex;border-top:1px solid ${lineColor};border-bottom:1.5px solid ${lineColor};margin-bottom:2px;}
+.tracing-row::after{content:'';position:absolute;top:50%;left:0;right:0;border-top:0.7px dashed ${lineColor};pointer-events:none;}
+.letter-cell{flex:1;border:2px solid ${cellBorderColor};margin-left:-2px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:8px;position:relative;z-index:1;}
 .letter-cell:first-child{margin-left:0;}
 .letter-char{font-family:'Pontiletra','Patrick Hand',cursive;line-height:1;}
 .single-letter-hero{display:grid;grid-template-columns:minmax(0,1fr) 132px;gap:10px;align-items:stretch;margin-bottom:2px;}
 .single-letter-hero .tracing-row{margin-bottom:0;}
-.letter-picture{height:168px;border:2px solid #60a5fa;border-radius:8px;display:flex;flex-direction:column;align-items:stretch;justify-content:stretch;overflow:hidden;background:#fff;}
-.letter-picture img{width:100%;height:136px;object-fit:contain;display:block;padding:4px;}
-.letter-picture-name{width:100%;border-top:1px solid #bae6fd;padding:5px 4px 6px;text-align:center;font-size:14px;font-weight:800;line-height:1.1;color:#0369a1;overflow-wrap:anywhere;}
-.ws-footer{border-top:1px dashed #e2e8f0;margin-top:14px;padding-top:9px;display:flex;justify-content:space-between;gap:16px;font-size:11px;color:#94a3b8;}
+.letter-picture{height:168px;border:2px solid ${cellBorderColor};border-radius:8px;display:flex;flex-direction:column;align-items:stretch;justify-content:stretch;overflow:hidden;background:#fff;}
+.letter-picture img{width:100%;height:136px;object-fit:contain;display:block;padding:4px;${imageFilter}}
+.letter-picture-name{width:100%;border-top:1px solid ${headerBorderColor};padding:5px 4px 6px;text-align:center;font-size:14px;font-weight:800;line-height:1.1;color:${pictureNameColor};overflow-wrap:anywhere;}
+.ws-footer{border-top:1px dashed #e2e8f0;margin-top:14px;padding-top:9px;display:flex;justify-content:space-between;gap:16px;font-size:11px;color:${footerColor};}
 `;
 }
 
@@ -125,6 +142,7 @@ type PrintHTMLOptions = {
   safeLetter: string;
   lines: number;
   printCSS: string;
+  blackAndWhite: boolean;
 };
 
 export function buildPrintHTML({
@@ -135,7 +153,9 @@ export function buildPrintHTML({
   safeLetter,
   lines,
   printCSS,
+  blackAndWhite,
 }: PrintHTMLOptions): string {
+  const headerIcon = blackAndWhite ? "✎" : "✏️";
   const pages = items
     .map((item, i) => {
       const badge = item.label
@@ -148,10 +168,10 @@ export function buildPrintHTML({
       <div class="ws-title">${escXML(title)}</div>
       <div class="ws-subtitle">${escXML(subtitle)}</div>
     </div>
-    <div aria-hidden="true" style="font-size:36px;line-height:1;">✏️</div>
+    <div aria-hidden="true" style="font-size:36px;line-height:1;color:${blackAndWhite ? "#111827" : "inherit"};">${headerIcon}</div>
   </div>
   <main class="ws-content">
-    <div class="tracing-block">${badge}${buildRowsStr(item, mode, safeLetter, lines)}</div>
+    <div class="tracing-block">${badge}${buildRowsStr(item, mode, safeLetter, lines, blackAndWhite)}</div>
   </main>
   <div class="ws-footer">
     <span>Data: ___/___/______</span>
@@ -260,7 +280,12 @@ async function waitForPrintAssets(win: Window): Promise<void> {
   ]);
 }
 
-export type PrintWorksheetOptions = Omit<PrintHTMLOptions, "printCSS">;
+export type PrintWorksheetOptions = Omit<
+  PrintHTMLOptions,
+  "printCSS" | "blackAndWhite"
+> & {
+  blackAndWhite?: boolean;
+};
 
 export async function printWorksheet(
   options: PrintWorksheetOptions,
@@ -272,11 +297,13 @@ export async function printWorksheet(
     // fall back to URL reference in @font-face
   }
 
+  const blackAndWhite = options.blackAndWhite ?? false;
   const items = await inlineImages(options.items);
   const html = buildPrintHTML({
     ...options,
     items,
-    printCSS: buildPrintCSS(fontBase64),
+    blackAndWhite,
+    printCSS: buildPrintCSS(fontBase64, blackAndWhite),
   });
   const blob = new Blob([html], { type: "text/html;charset=utf-8" });
   const url = URL.createObjectURL(blob);
