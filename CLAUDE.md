@@ -4,10 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-**Pontiletra** is a calligraphy tracing worksheet generator for Brazilian educators. It has two independent implementations that share the same feature set and UI design:
-
-- `tracing_worksheet_generator.html` — self-contained vanilla JS file, no build step, embeddable in tools like Notion or WordPress
-- `app/pontiletra/` — Next.js App Router route (TypeScript/React) served at `/pontiletra`
+**Pontiletra** is a calligraphy tracing worksheet generator for Brazilian educators. The active implementation is a Next.js App Router route served at `/pontiletra`.
 
 ## Commands
 
@@ -15,14 +12,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm run dev      # start dev server at http://localhost:3000
 npm run build    # production build
 npm run start    # serve production build
-npm run lint     # ESLint
+npm run lint     # ESLint CLI
 ```
 
 The root route (`/`) redirects to `/pontiletra`.
-
-## Running the HTML version
-
-Open `tracing_worksheet_generator.html` directly in a browser — no server needed.
 
 ## Next.js route (`app/pontiletra/`)
 
@@ -42,16 +35,16 @@ Both implementations share the same four activity modes:
 
 Each tracing row is an SVG with three guide lines (top at y=6, midline at y=h/2-2, baseline at y=h-8) and a `<text>` element rendered either solid (example row) or dotted (tracing rows via `stroke-dasharray="3 5"`).
 
-- React version: `TracingRow` component renders SVGs inline; `tracingSVGStr()` generates SVG strings for the print popup HTML
-- HTML version: `tracingSVG(text, fontSize, mode)` where `mode` is `'solid'` or `'dotted'`
+- `TracingRow` renders SVGs inline for the preview.
+- `tracingSVGStr()` generates SVG strings for the print popup HTML.
 
 ### Print/download flow
 
-`buildPrintHTML()` (React) / `buildPrintHTML` in the HTML version assembles a complete `<!DOCTYPE html>` document with embedded CSS and SVG blocks. For printing, it opens a new window and calls `window.print()` after a 800ms delay. Download uses `Blob` + object URL.
+`buildPrintHTML()` assembles a complete `<!DOCTYPE html>` document with embedded CSS and SVG blocks. It creates one printable page per worksheet item, so student-list mode gets a header and footer on every student page. Printing and PDF saving both open the generated document and call `window.print()` after fonts are ready.
 
 ### XML escaping
 
-All user input inserted into SVG `<text>` elements goes through `escXML()` to prevent injection — this is present in both implementations.
+All user input inserted into generated SVG/HTML strings goes through `escXML()` to prevent injection.
 
 ## UI language
 
