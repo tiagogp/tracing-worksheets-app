@@ -16,6 +16,7 @@ import {
   normalizeText,
   normalizeLetter,
   repeatedLetterLine,
+  shouldHighlightFirstLetter,
   fitTracingFontSize,
   parseStudents,
   decomposeTilde,
@@ -241,7 +242,7 @@ export default function PontiletraPage() {
         : undefined;
   const fontSize =
     mode === "single_letter" ? FONT_SIZE_LETTER_MODE : FONT_SIZE_DEFAULT;
-  const redFirstLetter = mode === "single_name";
+  const redFirstLetter = shouldHighlightFirstLetter(mode);
   const previewAccentColor = "#111827";
   const previewSoftLineColor = "#6b7280";
   const previewBadgeColor = "#374151";

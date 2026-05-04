@@ -45,6 +45,10 @@ export function repeatedLetterLine(letter: string, repeat: number): string {
   return letter.repeat(repeat);
 }
 
+export function shouldHighlightFirstLetter(mode: Mode): boolean {
+  return mode === "single_name" || mode === "student_list";
+}
+
 export function fitTracingFontSize(
   text: string,
   requestedFontSize: number,
